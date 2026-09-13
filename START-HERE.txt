@@ -1,0 +1,19 @@
+NEST STUDENT NOTES v1.2
+
+1. Google login already configured hai to same .env use karo.
+2. .env mein GOOGLE_CLIENT_ID aur enabled GOOGLE_CLIENT_SECRET hone chahiye.
+3. npm run check chalao.
+4. npm start chalao.
+5. Browser mein http://localhost:3000 kholo.
+6. Google se login karo.
+7. Dashboard par full name aur email save karo.
+8. Role fixed Student rahega.
+9. Uske baad private note upload karo.
+
+DATA STORAGE
+- Student/database data: data/users.sqlite
+- Uploaded note files: uploads/<user-id>/
+
+PRIVACY
+- Notes sirf same signed-in account ko dikhte hain.
+- Dusra user direct URL se bhi file access nahi kar sakta.

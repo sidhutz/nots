@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Privacy & your data · Nest</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+  <header><a class="brand" href="/" aria-label="Nest home"><span class="mark" aria-hidden="true">n</span> nest</a><span
+      class="small">Private student notes</span></header>
+  <main class="privacy">
+    <span class="eyebrow">Clear by design</span>
+    <h1>Your student account.<br>Your private notes.</h1>
+    <p>This app uses Google to sign you in. It does not ask for or store your Google password.</p>
+    <h2>What gets saved</h2>
+    <ul>
+      <li>Your Google account identifier, Google email, Google display name and profile photo URL.</li>
+      <li>Your student profile form: full name, contact email and fixed role Student.</li>
+      <li>Your uploaded note files, their file names, size, type and upload time.</li>
+      <li>A hashed session token and its expiry, so you can stay signed in.</li>
+    </ul>
+    <h2>Who can see the notes</h2>
+    <p>The note list and downloads are tied to the currently signed-in account on the server. A student can only list,
+      download or delete notes that belong to that same account.</p>
+    <h2>What does not get saved</h2>
+    <p>Google passwords, Gmail messages, Drive files, access tokens and refresh tokens are not stored in the database.
+      Access tokens are used briefly on the server to fetch the Google profile during login.</p>
+    <h2>Where data is stored</h2>
+    <p>Student profile data is stored in a local SQLite database file. Uploaded notes are stored as private files in the
+      app’s uploads folder next to that database.</p>
+    <h2>For the site owner</h2>
+    <p>Before a public launch, add your organization details, a real privacy contact, file-retention rules, deletion
+      workflow and backup policy.</p>
+    <h2>👨‍💻 About the site owner</h2>
+    <p>Hi, I'm Sidhu — a passionate student and aspiring developer.
+
+      I'm currently exploring the world of web development, programming, and modern technologies. I enjoy building
+      websites, experimenting with new ideas, and turning concepts into real, working projects.
+
+      I'm continuously improving my skills in HTML, CSS, JavaScript, C++, databases, and full-stack development. I
+      believe the best way to learn technology is by actually building things, solving problems, and learning from every
+      project.</p>
+    <p><a href="/">← Back to sign in</a></p>
+  </main>
+  <footer><span>Private student note storage.</span><a href="/privacy">Privacy &amp; your data</a></footer>
+</body>
+
+</html>

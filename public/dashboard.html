@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Student dashboard · Nest</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <a class="brand" href="/" aria-label="Nest home"><span class="mark" aria-hidden="true">n</span> nest</a>
+    <span class="small">Private student notes</span>
+  </header>
+  <main class="dashboard notes-dashboard">
+    <span class="status">✓ Signed in with Google</span>
+    <h1>Your private student space.</h1>
+    <p>Save your profile once, then upload note files that only your own signed-in account can see and download.</p>
+    <div class="alert" id="message" role="alert"></div>
+
+    <section class="profile student-summary" aria-label="Student summary">
+      <div class="profile-head">
+        <span class="avatar" id="avatar" aria-hidden="true">…</span>
+        <div>
+          <h2 id="heroName">Loading profile…</h2>
+          <p id="heroEmail"></p>
+        </div>
+      </div>
+      <dl>
+        <div><dt>Google account</dt><dd id="googleEmail">—</dd></div>
+        <div><dt>Email status</dt><dd id="verified">—</dd></div>
+        <div><dt>Member since</dt><dd id="created">—</dd></div>
+        <div><dt>Last sign-in</dt><dd id="last">—</dd></div>
+      </dl>
+    </section>
+
+    <div class="dashboard-grid">
+      <section class="card-section">
+        <div class="section-header">
+          <h2>Student profile form</h2>
+          <p id="profileState" class="small">Loading your student profile…</p>
+        </div>
+        <form id="studentProfileForm" class="form-grid">
+          <label>
+            Full name
+            <input id="fullName" name="fullName" type="text" autocomplete="name" required>
+          </label>
+          <label>
+            Email
+            <input id="contactEmail" name="contactEmail" type="email" autocomplete="email" required>
+          </label>
+          <label>
+            Role
+            <select id="role" name="role" disabled>
+              <option>Student</option>
+            </select>
+          </label>
+          <button class="primary" id="saveProfile" type="submit">Save student profile</button>
+        </form>
+      </section>
+
+      <section class="card-section">
+        <div class="section-header">
+          <h2>Upload notes</h2>
+          <p id="uploadHint" class="small">Loading upload options…</p>
+        </div>
+        <form id="noteUploadForm" class="form-grid" enctype="multipart/form-data">
+          <label>
+            Note title
+            <input id="noteTitle" name="title" type="text" placeholder="Physics class notes">
+          </label>
+          <label>
+            Note file
+            <input id="noteFile" name="noteFile" type="file" required>
+          </label>
+          <button class="primary" id="uploadNote" type="submit">Upload private note</button>
+        </form>
+      </section>
+    </div>
+
+    <section class="card-section note-library" aria-label="Your notes library">
+      <div class="section-header">
+        <h2>Your uploaded notes</h2>
+        <p class="small">These notes are scoped to your own signed-in account only.</p>
+      </div>
+      <div id="notesEmpty" class="empty-state">No notes yet. Save your student profile, then upload your first file.</div>
+      <div id="notesList" class="note-list"></div>
+    </section>
+
+    <div class="dashboard-actions">
+      <button class="secondary" id="logout">Sign out</button>
+      <p class="small">Signing out ends this session. Your student profile and uploaded notes remain in your private database and upload folder.</p>
+    </div>
+  </main>
+  <footer><span>Private student note storage.</span><a href="/privacy">Privacy &amp; your data</a></footer>
+</body>
+</html>

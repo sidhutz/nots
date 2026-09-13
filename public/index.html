@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Student notes login</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <a class="brand" href="/" aria-label="Nest home"><span class="mark" aria-hidden="true">S</span>Sidhu</a>
+    <span class="small">Private student notes</span>
+  </header>
+  <main class="login student-login">
+    <section class="intro">
+      <div>
+        <span class="eyebrow">Student notes, privately saved.</span>
+        <h1>Sign in with Google.<br>Then save your notes.</h1>
+        <p>Students log in with Google, confirm a full name and email, and upload private notes that only the same signed-in account can open.</p>
+      </div>
+      <div class="steps stack-steps">
+        <div class="step"><span class="step-number">01</span><b>Sign in</b>Use your Google account.</div>
+        <div class="step"><span class="step-number">02</span><b>Student form</b>Save full name, email and fixed role Student.</div>
+        <div class="step"><span class="step-number">03</span><b>Private uploads</b>Upload notes that stay visible only to you.</div>
+      </div>
+    </section>
+    <section class="panel" aria-labelledby="welcome">
+      <span class="lock" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg>
+      </span>
+      <h2 id="welcome">Student access</h2>
+      <p>Google keeps the password. This website stores your student profile and your private note files after sign-in.</p>
+      <div id="message" class="alert" role="alert"></div>
+      <div class="preview-card" aria-label="Student profile preview">
+        <div class="preview-label">What you will fill after login</div>
+        <label>Full name<input type="text" value="Your full name" disabled></label>
+        <label>Email<input type="email" value="you@example.com" disabled></label>
+        <label>Role<select disabled><option>Student</option></select></label>
+      </div>
+      <a class="google" href="/auth/google">
+        <svg aria-hidden="true" viewBox="0 0 48 48"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.5 9.5 0 0 1-4.1 6.2v5h6.6c3.9-3.6 6.1-8.8 6.1-14.9z"/><path fill="#34A853" d="M24 44c5.5 0 10.2-1.8 13.5-4.9l-6.6-5c-1.8 1.2-4.1 1.9-6.9 1.9-5.3 0-9.8-3.6-11.4-8.4H5.8v5.2A20 20 0 0 0 24 44z"/><path fill="#FBBC05" d="M12.6 27.6a12 12 0 0 1 0-7.2v-5.2H5.8a20 20 0 0 0 0 17.6z"/><path fill="#EA4335" d="M24 12c3 0 5.7 1 7.8 3l5.8-5.8A19.5 19.5 0 0 0 24 4 20 20 0 0 0 5.8 15.2l6.8 5.2A12 12 0 0 1 24 12z"/></svg>
+        Continue with Google
+      </a>
+      <p class="consent">After Google sign-in, you can save your full name, contact email, fixed role Student, and upload your own private notes. <a href="/privacy">See how your data is used</a>.</p>
+      <div class="rule"></div>
+      <div class="footnote"><span class="check" aria-hidden="true">✓</span> Your uploaded notes are only listed for your own signed-in account.</div>
+    </section>
+  </main>
+  <footer><span>Private student note storage.</span><a href="/privacy">Privacy &amp; your data</a></footer>
+</body>
+</html>
