@@ -39,8 +39,18 @@ export function readConfig(root=projectDir,env=process.env) {
   if(production && url.protocol!=='https:')errors.push('Production BASE_URL must use HTTPS.');
  }catch{errors.push('BASE_URL must be an HTTP(S) origin only, such as http://localhost:3000.');}
  const dbSetting=text('DB_PATH') || './data/users.sqlite';
- return {errors,envFileFound:existsSync(envPath),clientId,clientSecret,port,base,
-  dbPath:isAbsolute(dbSetting)?dbSetting:resolve(root,dbSetting)};
+ const n8nWebhookUrl=text('N8N_LOGIN_WEBHOOK_URL');
+ const n8nWebhookSecret=text('N8N_WEBHOOK_SECRET');
+ const supabaseUrl=text('SUPABASE_URL'), supabaseSecretKey=text('SUPABASE_SECRET_KEY');
+ if(supabaseUrl||supabaseSecretKey){
+  if(!supabaseUrl)errors.push('SUPABASE_URL is empty. Configure the Supabase project URL in .env.');
+  else {try {const parsed=new URL(supabaseUrl);if(parsed.protocol!=='https:'||!parsed.hostname.endsWith('.supabase.co')||parsed.pathname!=='/'||parsed.search||parsed.hash)throw Error();}catch{errors.push('SUPABASE_URL must be the HTTPS URL shown in Supabase project settings.');}}
+  if(!supabaseSecretKey)errors.push('SUPABASE_SECRET_KEY is empty. Add the server-only secret key to .env.');
+  else if(!/^(sb_secret_[A-Za-z0-9_-]+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.test(supabaseSecretKey))errors.push('SUPABASE_SECRET_KEY format is invalid; use a Supabase secret/service_role key.');
+ }
+ return {errors,envFileFound:existsSync(envPath),clientId,clientSecret,port,base,supabaseUrl,supabaseSecretKey,
+  dbPath:isAbsolute(dbSetting)?dbSetting:resolve(root,dbSetting),
+  n8nWebhookUrl,n8nWebhookSecret};
 }
 export function requireConfig() {
  try {

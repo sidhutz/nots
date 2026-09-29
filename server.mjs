@@ -1,18 +1,16 @@
 import http from 'node:http';
-import { readFileSync, mkdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
-import { dirname, extname, basename, join, resolve } from 'node:path';
-import { openStore } from './db.mjs';
+import { extname, basename } from 'node:path';
+import { openSupabaseStore } from './supabase-store.mjs';
 import { requireConfig } from './config.mjs';
 
 const config = requireConfig();
-const { port, base, clientId, clientSecret } = config;
+const { port, base, clientId, clientSecret, n8nWebhookUrl, n8nWebhookSecret } = config;
 const secure = base.startsWith('https:');
 const callback = base + '/auth/google/callback';
-const store = openStore(config.dbPath);
-const db = store.db;
-const uploadRoot = resolve(dirname(config.dbPath), 'uploads');
-mkdirSync(uploadRoot, { recursive: true, mode: 0o700 });
+if (!config.supabaseUrl || !config.supabaseSecretKey) throw Error('Supabase is not configured. Set SUPABASE_URL and SUPABASE_SECRET_KEY in .env.');
+const store = openSupabaseStore({ url: config.supabaseUrl, secretKey: config.supabaseSecretKey });
 
 const random = () => randomBytes(32).toString('base64url');
 const randomHex = size => randomBytes(size).toString('hex');
@@ -58,17 +56,14 @@ function sameOrigin(req) {
   return !req.headers.origin || req.headers.origin === base;
 }
 
-function getSessionUser(req) {
+async function getSessionUser(req) {
   const token = req.cookies.sid;
   if (!token) return null;
-  const row = db.prepare(`SELECT u.id FROM users u
-    JOIN sessions s ON s.user_id=u.id
-    WHERE s.token_hash=? AND s.expires_at>?`).get(hash(token), Date.now());
-  return row ? store.getUserById(row.id) : null;
+  return store.getSessionUser(hash(token));
 }
 
-function requireUser(req, res) {
-  const user = getSessionUser(req);
+async function requireUser(req, res) {
+  const user = await getSessionUser(req);
   if (!user) {
     json(res, 401, { error: 'Sign in required' });
     return null;
@@ -80,6 +75,33 @@ async function googleJSON(url, options = {}) {
   const response = await fetch(url, { ...options, signal: AbortSignal.timeout(15000) });
   if (!response.ok) throw Error('Google request rejected');
   return response.json();
+}
+
+async function notifyN8n(eventType, data) {
+  if (!n8nWebhookUrl) return;
+  try {
+    const response = await fetch(n8nWebhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(n8nWebhookSecret ? { 'X-Webhook-Secret': n8nWebhookSecret } : {}),
+      },
+      body: JSON.stringify({
+        event: eventType,
+        timestamp: new Date().toISOString(),
+        ...data,
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      console.error(`n8n webhook error (${eventType}): HTTP ${response.status} ${response.statusText}`, body ? `— ${body.slice(0, 200)}` : '');
+    } else {
+      console.log(`n8n webhook notified: ${eventType} (HTTP ${response.status})`);
+    }
+  } catch (error) {
+    console.error(`n8n webhook failed (${eventType}):`, error.message);
+  }
 }
 
 async function readBody(req, maxBytes) {
@@ -160,17 +182,15 @@ function formatUser(user) {
   };
 }
 
-function noteFilePath(note) {
-  const fullPath = resolve(uploadRoot, note.storedName);
-  if (!fullPath.startsWith(uploadRoot)) throw Error('Unsafe note path');
-  return fullPath;
-}
-
 function noteJson(note) {
   return {
     ...note,
     downloadUrl: `/api/notes/${note.id}/download`,
   };
+}
+
+function audit(userId, eventType, details = {}) {
+  store.logActivity(userId, eventType, details).catch(error => console.error('Activity log failed:', error.message));
 }
 
 const server = http.createServer(async (req, res) => {
@@ -187,11 +207,10 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/auth/google') {
       if (!clientId || !clientSecret) return redirect(res, '/?error=setup');
-      store.cleanup();
-      if (req.cookies.oauth_state) db.prepare('DELETE FROM oauth_states WHERE token_hash=?').run(hash(req.cookies.oauth_state));
+      await store.cleanup();
       const state = random();
       const verifier = random();
-      db.prepare('INSERT INTO oauth_states VALUES(?,?,?)').run(hash(state), verifier, Date.now() + 600000);
+      await store.createOAuthState(hash(state), verifier, Date.now() + 600000);
       res.setHeader('Set-Cookie', cookie('oauth_state', state, 600));
       const auth = new URL('https://accounts.google.com/o/oauth2/v2/auth');
       auth.search = new URLSearchParams({
@@ -211,7 +230,7 @@ const server = http.createServer(async (req, res) => {
       res.setHeader('Set-Cookie', cookie('oauth_state', '', 0));
       const state = url.searchParams.get('state');
       if (!state || !same(state, req.cookies.oauth_state)) return redirect(res, '/?error=state');
-      const flow = db.prepare('DELETE FROM oauth_states WHERE token_hash=? RETURNING *').get(hash(state));
+      const flow = await store.consumeOAuthState(hash(state));
       if (!flow || flow.expires_at <= Date.now()) return redirect(res, '/?error=state');
       if (url.searchParams.has('error')) return redirect(res, '/?error=cancelled');
       const code = url.searchParams.get('code');
@@ -233,42 +252,60 @@ const server = http.createServer(async (req, res) => {
         headers: { Authorization: `Bearer ${tokens.access_token}` },
       });
       if (typeof profile.sub !== 'string' || typeof profile.email !== 'string' || profile.email_verified !== true) return redirect(res, '/?error=unverified');
-      const user = store.upsert(profile);
-      if (req.cookies.sid) db.prepare('DELETE FROM sessions WHERE token_hash=?').run(hash(req.cookies.sid));
+      const user = await store.upsert(profile);
+      if (req.cookies.sid) await store.deleteSession(hash(req.cookies.sid));
       const sid = random();
-      db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(hash(sid), user.id, Date.now() + 604800000);
+      await store.createSession(hash(sid), user.id, Date.now() + 604800000);
+      audit(user.id, 'google_login');
       res.setHeader('Set-Cookie', [cookie('oauth_state', '', 0), cookie('sid', sid, 604800)]);
+      // Notify n8n automation (fire-and-forget, don't block login)
+      notifyN8n('google_login', {
+        user: {
+          id: user.id,
+          google_email: profile.email,
+          google_name: profile.name || '',
+          picture: profile.picture || null,
+          email_verified: profile.email_verified,
+          full_name: user.full_name || profile.name || '',
+          contact_email: user.contact_email || profile.email,
+          role: user.role || 'Student',
+          profile_completed: Boolean(user.profile_completed),
+        },
+      }).catch(err => console.error('n8n login notification error:', err.message));
       return redirect(res, '/dashboard');
     }
 
     if (req.method === 'GET' && url.pathname === '/api/me') {
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
+      audit(user.id, 'profile_viewed');
       return json(res, 200, { user: formatUser(user) });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/profile') {
       if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
       const body = await readJson(req);
       const fullName = sanitizeText(body.fullName, 120);
       const contactEmail = sanitizeText(body.contactEmail, 160).toLowerCase();
       if (fullName.length < 2) return json(res, 400, { error: 'Full name must be at least 2 characters.' });
       if (!isValidEmail(contactEmail)) return json(res, 400, { error: 'Enter a valid email address.' });
-      const updated = store.updateStudentProfile(user.id, { fullName, contactEmail });
+      const updated = await store.updateStudentProfile(user.id, { fullName, contactEmail });
+      audit(user.id, 'profile_updated');
       return json(res, 200, { user: formatUser(updated) });
     }
 
     if (req.method === 'GET' && url.pathname === '/api/notes') {
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
-      return json(res, 200, { notes: store.listNotesByUser(user.id).map(noteJson) });
+      audit(user.id, 'notes_viewed');
+      return json(res, 200, { notes: (await store.listNotesByUser(user.id)).map(noteJson) });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/notes/upload') {
       if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
       if (!user.profile_completed) return json(res, 400, { error: 'Save your student profile before uploading notes.' });
       const { fields, files } = await parseMultipart(req);
@@ -277,18 +314,18 @@ const server = http.createServer(async (req, res) => {
       const originalName = sanitizeFilename(uploaded.filename);
       const title = sanitizeText(fields.title || originalName.replace(/\.[^.]+$/, ''), 120) || 'Untitled note';
       const extension = extname(originalName).slice(0, 20);
-      const relativeName = join(String(user.id), `${Date.now()}-${randomHex(6)}${extension}`);
-      const fullPath = resolve(uploadRoot, relativeName);
-      mkdirSync(dirname(fullPath), { recursive: true, mode: 0o700 });
-      writeFileSync(fullPath, uploaded.data);
-      const note = store.createNote({
+      const relativeName = `${hash(user.id).slice(0, 32)}/${Date.now()}-${randomHex(6)}${extension}`;
+      await store.uploadNote(relativeName, uploaded.data, uploaded.contentType);
+      let note;
+      try { note = await store.createNote({
         userId: user.id,
         title,
         originalName,
         storedName: relativeName,
         mimeType: uploaded.contentType,
         sizeBytes: uploaded.data.length,
-      });
+      }); } catch (error) { await store.deleteNoteFile(relativeName).catch(() => {}); throw error; }
+      audit(user.id, 'note_uploaded', { noteId: note.id, sizeBytes: uploaded.data.length });
       return json(res, 201, { note: noteJson(note) });
     }
 
@@ -296,14 +333,14 @@ const server = http.createServer(async (req, res) => {
     if (noteMatch) {
       const noteId = Number(noteMatch[1]);
       const action = noteMatch[2] || 'delete';
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
-      const note = store.getNoteByIdForUser(noteId, user.id);
+      const note = await store.getNoteByIdForUser(noteId, user.id);
       if (!note) return json(res, 404, { error: 'Note not found.' });
       if (action === 'download' && req.method === 'GET') {
-        const fullPath = noteFilePath(note);
-        if (!existsSync(fullPath)) return json(res, 404, { error: 'Stored file not found.' });
-        const file = readFileSync(fullPath);
+        let file;
+        try { file = await store.downloadNote(note.storedName); } catch { return json(res, 404, { error: 'Stored file not found.' }); }
+        audit(user.id, 'note_downloaded', { noteId: note.id });
         res.writeHead(200, {
           'Content-Type': note.mimeType || 'application/octet-stream',
           'Content-Length': String(file.length),
@@ -313,22 +350,119 @@ const server = http.createServer(async (req, res) => {
       }
       if (action === 'delete' && req.method === 'DELETE') {
         if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
-        const fullPath = noteFilePath(note);
-        if (existsSync(fullPath)) unlinkSync(fullPath);
-        store.deleteNoteByIdForUser(noteId, user.id);
+        await store.deleteNoteFile(note.storedName);
+        await store.deleteNoteByIdForUser(noteId, user.id);
+        audit(user.id, 'note_deleted', { noteId });
+        return json(res, 200, { ok: true });
+      }
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/text-notes') {
+      const user = await requireUser(req, res);
+      if (!user) return;
+      audit(user.id, 'text_notes_viewed');
+      return json(res, 200, { textNotes: await store.listTextNotesByUser(user.id) });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/text-notes') {
+      if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
+      const user = await requireUser(req, res);
+      if (!user) return;
+      if (!user.profile_completed) return json(res, 400, { error: 'Save your student profile before adding personal notes.' });
+      const body = await readJson(req);
+      const title = sanitizeText(body.title, 120);
+      const content = String(body.content || '').trim().slice(0, 10000);
+      if (!title) return json(res, 400, { error: 'Title is required for personal note.' });
+      if (!content) return json(res, 400, { error: 'Content is required for personal note.' });
+      const textNote = await store.createTextNote({ userId: user.id, title, content });
+      audit(user.id, 'text_note_created', { noteId: textNote.id });
+      return json(res, 201, { textNote });
+    }
+
+    const textNoteMatch = url.pathname.match(/^\/api\/text-notes\/(\d+)$/);
+    if (textNoteMatch) {
+      const noteId = Number(textNoteMatch[1]);
+      const user = await requireUser(req, res);
+      if (!user) return;
+      const existing = await store.getTextNoteByIdForUser(noteId, user.id);
+      if (!existing) return json(res, 404, { error: 'Personal note not found.' });
+      if (req.method === 'PUT' || req.method === 'PATCH') {
+        if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
+        const body = await readJson(req);
+        const title = sanitizeText(body.title || existing.title, 120);
+        const content = body.content !== undefined ? String(body.content).trim().slice(0, 10000) : existing.content;
+        if (!title) return json(res, 400, { error: 'Title is required.' });
+        if (!content) return json(res, 400, { error: 'Content is required.' });
+        const updated = await store.updateTextNoteForUser(noteId, user.id, { title, content });
+        audit(user.id, 'text_note_updated', { noteId });
+        return json(res, 200, { textNote: updated });
+      }
+      if (req.method === 'DELETE') {
+        if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
+        await store.deleteTextNoteByIdForUser(noteId, user.id);
+        audit(user.id, 'text_note_deleted', { noteId });
+        return json(res, 200, { ok: true });
+      }
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/todos') {
+      const user = await requireUser(req, res);
+      if (!user) return;
+      audit(user.id, 'todos_viewed');
+      return json(res, 200, { todos: await store.listTodosByUser(user.id) });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/todos') {
+      if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
+      const user = await requireUser(req, res);
+      if (!user) return;
+      if (!user.profile_completed) return json(res, 400, { error: 'Save your student profile before adding todos.' });
+      const body = await readJson(req);
+      const text = sanitizeText(body.text, 200);
+      if (!text) return json(res, 400, { error: 'Todo text is required.' });
+      const todo = await store.createTodo({ userId: user.id, text });
+      audit(user.id, 'todo_created', { todoId: todo.id });
+      return json(res, 201, { todo });
+    }
+
+    const todoMatch = url.pathname.match(/^\/api\/todos\/(\d+)$/);
+    if (todoMatch) {
+      const todoId = Number(todoMatch[1]);
+      const user = await requireUser(req, res);
+      if (!user) return;
+      const existing = await store.getTodoByIdForUser(todoId, user.id);
+      if (!existing) return json(res, 404, { error: 'Todo not found.' });
+      if (req.method === 'PATCH' || req.method === 'PUT') {
+        if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
+        const body = await readJson(req);
+        const completed = body.completed !== undefined ? Boolean(body.completed) : existing.completed;
+        const updated = await store.toggleTodoForUser(todoId, user.id, completed);
+        audit(user.id, 'todo_updated', { todoId, completed });
+        return json(res, 200, { todo: updated });
+      }
+      if (req.method === 'DELETE') {
+        if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
+        await store.deleteTodoForUser(todoId, user.id);
+        audit(user.id, 'todo_deleted', { todoId });
         return json(res, 200, { ok: true });
       }
     }
 
     if (req.method === 'POST' && url.pathname === '/auth/logout') {
       if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
-      if (req.cookies.sid) db.prepare('DELETE FROM sessions WHERE token_hash=?').run(hash(req.cookies.sid));
+      const user = await getSessionUser(req);
+      if (req.cookies.sid) await store.deleteSession(hash(req.cookies.sid));
+      if (user) audit(user.id, 'logout');
       res.setHeader('Set-Cookie', cookie('sid', '', 0));
       return json(res, 200, { ok: true });
     }
 
     if (req.method === 'GET' && assets.has(url.pathname)) {
-      if (url.pathname === '/dashboard' && !getSessionUser(req)) return redirect(res, '/');
+      if (url.pathname === '/dashboard') {
+        const user = await getSessionUser(req);
+        if (!user) return redirect(res, '/');
+        audit(user.id, 'dashboard_viewed');
+      }
       const [type, body] = assets.get(url.pathname);
       res.writeHead(200, { 'Content-Type': type });
       return res.end(body);
@@ -357,17 +491,17 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-setInterval(() => store.cleanup(), 60000).unref();
+setInterval(() => store.cleanup().catch(error => console.error('Supabase cleanup failed:', error.message)), 60000).unref();
 server.on('error', error => {
   console.error(error.code === 'EADDRINUSE'
     ? 'Port is busy. Stop the OLD website terminal with Ctrl+C, then start this version again.'
     : `Server failed (${error.code || 'unknown'}). Check the port and permissions.`);
   process.exit(1);
 });
-server.listen(port, () => {
+server.listen(port, '0.0.0.0', () => {
   console.log('Nest Student Notes v1.2 - Google credentials loaded (values hidden).');
   console.log(`Website ready: ${base}`);
   console.log(`Google callback: ${callback}`);
-  console.log('Database:', config.dbPath);
-  console.log('Private files:', uploadRoot);
+  console.log('Database and private files: Supabase');
+  console.log('n8n webhook:', n8nWebhookUrl ? `Connected → ${n8nWebhookUrl}` : 'Not configured (N8N_LOGIN_WEBHOOK_URL missing in .env)');
 });

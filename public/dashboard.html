@@ -10,7 +10,7 @@
 </head>
 <body>
   <header>
-    <a class="brand" href="/" aria-label="Nest home"><span class="mark" aria-hidden="true">n</span> nest</a>
+    <a class="brand" href="/" aria-label="Nest home"><span class="mark" aria-hidden="true">S</span> Student Hub</a>
     <span class="small">Private student notes</span>
   </header>
   <main class="dashboard notes-dashboard">
@@ -77,11 +77,53 @@
           <button class="primary" id="uploadNote" type="submit">Upload private note</button>
         </form>
       </section>
+      <section class="card-section">
+        <div class="section-header">
+          <h2>Write personal note</h2>
+          <p id="textNoteHint" class="small">Loading personal note options…</p>
+        </div>
+        <form id="textNoteForm" class="form-grid">
+          <label>
+            Note title
+            <input id="textNoteTitle" name="title" type="text" placeholder="Chapter 3 summary" required>
+          </label>
+          <label>
+            Note content
+            <textarea id="textNoteContent" name="content" placeholder="Write your study notes here..." rows="4" required></textarea>
+          </label>
+          <button class="primary" id="saveTextNote" type="submit">Save personal note</button>
+        </form>
+      </section>
+
+      <section class="card-section">
+        <div class="section-header">
+          <h2>Student Todo list</h2>
+          <p id="todoHint" class="small">Loading todo options…</p>
+        </div>
+        <form id="todoForm" class="form-grid">
+          <label>
+            New task
+            <input id="todoText" name="text" type="text" placeholder="Complete Math assignment" required>
+          </label>
+          <button class="primary" id="addTodo" type="submit">Add Todo</button>
+        </form>
+        <div id="todosEmpty" class="empty-state" style="margin-top: 16px;">No todo items yet. Add your first task above.</div>
+        <div id="todosList" class="todo-list"></div>
+      </section>
     </div>
+
+    <section class="card-section note-library" aria-label="Your personal written notes">
+      <div class="section-header">
+        <h2>Your personal written notes</h2>
+        <p class="small">These personal notes are visible only to your signed-in account.</p>
+      </div>
+      <div id="textNotesEmpty" class="empty-state">No personal notes written yet. Write and save your first note above.</div>
+      <div id="textNotesList" class="note-list"></div>
+    </section>
 
     <section class="card-section note-library" aria-label="Your notes library">
       <div class="section-header">
-        <h2>Your uploaded notes</h2>
+        <h2>Your uploaded file notes</h2>
         <p class="small">These notes are scoped to your own signed-in account only.</p>
       </div>
       <div id="notesEmpty" class="empty-state">No notes yet. Save your student profile, then upload your first file.</div>

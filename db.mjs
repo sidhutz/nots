@@ -48,6 +48,21 @@ export function openStore(path) {
       mime_type TEXT,
       size_bytes INTEGER NOT NULL,
       created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS text_notes (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS todos (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      text TEXT NOT NULL,
+      completed INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
     );`);
   ensureUserColumns(db);
   return {
@@ -129,6 +144,52 @@ export function openStore(path) {
     },
     deleteNoteByIdForUser(noteId, userId) {
       return db.prepare(`DELETE FROM notes WHERE id=? AND user_id=?`).run(noteId, userId).changes > 0;
+    },
+    createTextNote({ userId, title, content }) {
+      const now = new Date().toISOString();
+      const result = db.prepare(`INSERT INTO text_notes
+        (user_id, title, content, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)`).run(userId, title, content, now, now);
+      return db.prepare(`SELECT id, title, content, created_at AS createdAt, updated_at AS updatedAt
+        FROM text_notes WHERE id=?`).get(result.lastInsertRowid);
+    },
+    listTextNotesByUser(userId) {
+      return db.prepare(`SELECT id, title, content, created_at AS createdAt, updated_at AS updatedAt
+        FROM text_notes WHERE user_id=? ORDER BY id DESC`).all(userId);
+    },
+    getTextNoteByIdForUser(noteId, userId) {
+      return db.prepare(`SELECT id, user_id AS userId, title, content, created_at AS createdAt, updated_at AS updatedAt
+        FROM text_notes WHERE id=? AND user_id=?`).get(noteId, userId) || null;
+    },
+    updateTextNoteForUser(noteId, userId, { title, content }) {
+      const now = new Date().toISOString();
+      db.prepare(`UPDATE text_notes SET title=?, content=?, updated_at=? WHERE id=? AND user_id=?`).run(title, content, now, noteId, userId);
+      return this.getTextNoteByIdForUser(noteId, userId);
+    },
+    deleteTextNoteByIdForUser(noteId, userId) {
+      return db.prepare(`DELETE FROM text_notes WHERE id=? AND user_id=?`).run(noteId, userId).changes > 0;
+    },
+    createTodo({ userId, text }) {
+      const now = new Date().toISOString();
+      const result = db.prepare(`INSERT INTO todos
+        (user_id, text, completed, created_at)
+        VALUES (?, ?, 0, ?)`).run(userId, text, now);
+      const row = db.prepare(`SELECT id, text, completed, created_at AS createdAt FROM todos WHERE id=?`).get(result.lastInsertRowid);
+      return { ...row, completed: Boolean(row.completed) };
+    },
+    listTodosByUser(userId) {
+      return db.prepare(`SELECT id, text, completed, created_at AS createdAt FROM todos WHERE user_id=? ORDER BY id DESC`).all(userId).map(row => ({ ...row, completed: Boolean(row.completed) }));
+    },
+    getTodoByIdForUser(todoId, userId) {
+      const row = db.prepare(`SELECT id, user_id AS userId, text, completed, created_at AS createdAt FROM todos WHERE id=? AND user_id=?`).get(todoId, userId);
+      return row ? { ...row, completed: Boolean(row.completed) } : null;
+    },
+    toggleTodoForUser(todoId, userId, completed) {
+      db.prepare(`UPDATE todos SET completed=? WHERE id=? AND user_id=?`).run(completed ? 1 : 0, todoId, userId);
+      return this.getTodoByIdForUser(todoId, userId);
+    },
+    deleteTodoForUser(todoId, userId) {
+      return db.prepare(`DELETE FROM todos WHERE id=? AND user_id=?`).run(todoId, userId).changes > 0;
     },
     cleanup() {
       db.prepare('DELETE FROM sessions WHERE expires_at<=?').run(Date.now());

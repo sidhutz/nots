@@ -10,7 +10,7 @@
 </head>
 
 <body>
-  <header><a class="brand" href="/" aria-label="Nest home"><span class="mark" aria-hidden="true">n</span> nest</a><span
+  <header><a class="brand" href="/" aria-label="Nest home"><span class="mark" aria-hidden="true">n</span>Student Hub</a><span
       class="small">Private student notes</span></header>
   <main class="privacy">
     <span class="eyebrow">Clear by design</span>
@@ -22,6 +22,8 @@
       <li>Your student profile form: full name, contact email and fixed role Student.</li>
       <li>Your uploaded note files, their file names, size, type and upload time.</li>
       <li>A hashed session token and its expiry, so you can stay signed in.</li>
+      <li>Your personal text notes and to-do list items.</li>
+      <li>Activity events such as sign-in/out, dashboard and list views, and profile, note or to-do changes. Event details do not copy note or to-do content.</li>
     </ul>
     <h2>Who can see the notes</h2>
     <p>The note list and downloads are tied to the currently signed-in account on the server. A student can only list,
@@ -30,13 +32,13 @@
     <p>Google passwords, Gmail messages, Drive files, access tokens and refresh tokens are not stored in the database.
       Access tokens are used briefly on the server to fetch the Google profile during login.</p>
     <h2>Where data is stored</h2>
-    <p>Student profile data is stored in a local SQLite database file. Uploaded notes are stored as private files in the
-      app’s uploads folder next to that database.</p>
+    <p>Account and student data are stored in the site owner’s Supabase database. Uploaded note files are stored in a
+      private Supabase Storage bucket. The website server controls access and users can only access their own records.</p>
     <h2>For the site owner</h2>
     <p>Before a public launch, add your organization details, a real privacy contact, file-retention rules, deletion
       workflow and backup policy.</p>
     <h2>👨‍💻 About the site owner</h2>
-    <p>Hi, I'm Sidhu — a passionate student and aspiring developer.
+    <p>Hi, I'm Siddharth — a passionate student and aspiring developer.
 
       I'm currently exploring the world of web development, programming, and modern technologies. I enjoy building
       websites, experimenting with new ideas, and turning concepts into real, working projects.

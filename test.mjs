@@ -38,13 +38,60 @@ test('Notes are only listed and fetched for their owner', () => {
   s.db.close();
 });
 
-test('Deleting a user cascades sessions and notes', () => {
+test('Deleting a user cascades sessions, notes, text notes, and todos', () => {
   const s = openStore(':memory:');
   const user = s.upsert({ sub: 'four', email: 'x@example.com', name: 'X', email_verified: true });
   s.createNote({ userId: user.id, title: 'History', originalName: 'history.txt', storedName: '1/history.txt', mimeType: 'text/plain', sizeBytes: 50 });
+  s.createTextNote({ userId: user.id, title: 'Exam Tips', content: 'Study chapter 4' });
+  s.createTodo({ userId: user.id, text: 'Submit assignment' });
   s.db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(createHash('sha256').update('session').digest('hex'), user.id, Date.now() + 60000);
   s.db.prepare('DELETE FROM users WHERE id=?').run(user.id);
   assert.equal(s.db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n, 0);
   assert.equal(s.db.prepare('SELECT COUNT(*) AS n FROM notes').get().n, 0);
+  assert.equal(s.db.prepare('SELECT COUNT(*) AS n FROM text_notes').get().n, 0);
+  assert.equal(s.db.prepare('SELECT COUNT(*) AS n FROM todos').get().n, 0);
+  s.db.close();
+});
+
+test('Personal text notes are isolated by user and support update and delete', () => {
+  const s = openStore(':memory:');
+  const u1 = s.upsert({ sub: 'tn1', email: 'tn1@example.com', name: 'Student 1', email_verified: true });
+  const u2 = s.upsert({ sub: 'tn2', email: 'tn2@example.com', name: 'Student 2', email_verified: true });
+
+  const note1 = s.createTextNote({ userId: u1.id, title: 'Physics', content: 'Newton Laws' });
+  s.createTextNote({ userId: u2.id, title: 'Chemistry', content: 'Organic reactions' });
+
+  assert.equal(s.listTextNotesByUser(u1.id).length, 1);
+  assert.equal(s.listTextNotesByUser(u2.id).length, 1);
+  assert.equal(s.getTextNoteByIdForUser(note1.id, u1.id).title, 'Physics');
+  assert.equal(s.getTextNoteByIdForUser(note1.id, u2.id), null);
+
+  const updated = s.updateTextNoteForUser(note1.id, u1.id, { title: 'Physics Rev', content: 'Newton 3 Laws' });
+  assert.equal(updated.title, 'Physics Rev');
+  assert.equal(updated.content, 'Newton 3 Laws');
+
+  assert.equal(s.deleteTextNoteByIdForUser(note1.id, u1.id), true);
+  assert.equal(s.listTextNotesByUser(u1.id).length, 0);
+  s.db.close();
+});
+
+test('Todos are isolated by user and support toggling completed and delete', () => {
+  const s = openStore(':memory:');
+  const u1 = s.upsert({ sub: 'td1', email: 'td1@example.com', name: 'Student 1', email_verified: true });
+  const u2 = s.upsert({ sub: 'td2', email: 'td2@example.com', name: 'Student 2', email_verified: true });
+
+  const todo1 = s.createTodo({ userId: u1.id, text: 'Read Chapter 1' });
+  s.createTodo({ userId: u2.id, text: 'Solve Math practice' });
+
+  assert.equal(s.listTodosByUser(u1.id).length, 1);
+  assert.equal(s.listTodosByUser(u2.id).length, 1);
+  assert.equal(todo1.completed, false);
+  assert.equal(s.getTodoByIdForUser(todo1.id, u2.id), null);
+
+  const toggled = s.toggleTodoForUser(todo1.id, u1.id, true);
+  assert.equal(toggled.completed, true);
+
+  assert.equal(s.deleteTodoForUser(todo1.id, u1.id), true);
+  assert.equal(s.listTodosByUser(u1.id).length, 0);
   s.db.close();
 });

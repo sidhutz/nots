@@ -8,8 +8,8 @@ Google sign-in wali responsive student-notes website. Student Google se login ka
 - Student profile form: full name, contact email, role Student
 - Private note uploads up to 10 MB per file
 - Each signed-in student can list, download and delete only their own notes
-- Local SQLite database for metadata
-- Local private uploads folder for note files
+- Supabase Postgres for accounts, profiles, sessions, notes, todos, and activity history
+- Private Supabase Storage bucket for uploaded note files
 - No external npm dependency
 
 ## Run
@@ -35,7 +35,13 @@ GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-enabled-client-secret
 DB_PATH=./data/users.sqlite
 NODE_ENV=development
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_SECRET_KEY=sb_secret_your-server-only-key
 ```
+
+`SUPABASE_SECRET_KEY` is server-only. Isse `public/` files, Git, screenshots,
+ya chat mein kabhi paste na karein. `supabase-schema.sql` Supabase SQL Editor
+mein ek baar run karein; ye private storage bucket aur app tables banata hai.
 
 ## Google Console settings
 
@@ -57,31 +63,27 @@ Agar app testing mode mein hai, Audience > Test users mein apna Google email add
 4. Profile save hone ke baad note upload unlock hota hai.
 5. Uploaded note sirf wahi signed-in account dekh, download ya delete kar sakta hai.
 
-## Data kahan store hota hai?
+## Supabase mein kaunsa data store hota hai?
 
-Default setup mein:
+- Postgres tables mein Google account identifier/email/name, student profile,
+  session/OAuth state metadata, uploaded-note metadata, personal text notes,
+  todos, aur activity events.
+- Uploaded note files private `student-notes` Storage bucket mein.
+- Activity history records sign-in/out, dashboard/profile/note/todo views and
+  changes. Note content aur personal note text activity details mein duplicate
+  nahi hote.
+- Purana local SQLite database aur uploads migration ke baad backup ke roop
+  mein rehte hain.
 
-```text
-google-login-fixed/
-├── data/
-│   └── users.sqlite
-└── uploads/
-    └── <user-id>/
+Local data ko kisi naye empty Supabase project mein transfer karne ke liye:
+
+```bash
+npm run migrate:supabase
+node migrate-to-supabase.mjs --apply
 ```
 
-### SQLite database mein
-
-- Google account identifier
-- Google email, Google name, picture URL
-- Student full name
-- Student contact email
-- Fixed role Student
-- Session metadata
-- Note metadata: title, original file name, mime type, size, upload time
-
-### Upload folder mein
-
-- Actual note files
+Pehla command sirf counts dikhata hai; doosra apply karke local data copy
+karta hai. Non-empty Supabase tables hon to migration ruk jaati hai.
 
 ## Security model
 
@@ -90,6 +92,8 @@ google-login-fixed/
 - Session cookie HttpOnly hai.
 - Note APIs owner check karti hain, isliye ek user dusre user ka note list/download/delete nahi kar sakta.
 - Profile save ke bina note upload allow nahi hota.
+- Supabase tables par RLS enabled hai aur Storage bucket private hai. Website
+  backend hi server-only Supabase key ke through access karta hai.
 
 ## Useful commands
 
