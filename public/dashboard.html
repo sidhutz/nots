@@ -4,51 +4,78 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>Student dashboard · Nest</title>
+  <title>Student Dashboard · Student Hub Studio</title>
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" defer></script>
 </head>
 <body>
   <header>
-    <a class="brand" href="/" aria-label="Nest home"><span class="mark" aria-hidden="true">S</span> Student Hub</a>
-    <span class="small">Private student notes</span>
+    <a class="brand" href="/" aria-label="Student Hub home">
+      <span class="mark" aria-hidden="true">S</span>
+      <span class="brand-text">Student Hub</span>
+    </a>
+    <div class="header-actions">
+      <span class="status"><span class="pulse-dot" aria-hidden="true"></span> Signed in with Google</span>
+      <a href="/privacy" class="header-link">Privacy</a>
+    </div>
   </header>
-  <main class="dashboard notes-dashboard">
-    <span class="status">✓ Signed in with Google</span>
-    <h1>Your private student space.</h1>
-    <p>Save your profile once, then upload note files that only your own signed-in account can see and download.</p>
-    <div class="alert" id="message" role="alert"></div>
 
+  <main class="dashboard notes-dashboard">
+    <!-- Hero / Student Passport Section -->
     <section class="profile student-summary" aria-label="Student summary">
       <div class="profile-head">
-        <span class="avatar" id="avatar" aria-hidden="true">…</span>
-        <div>
-          <h2 id="heroName">Loading profile…</h2>
-          <p id="heroEmail"></p>
+        <div class="avatar-wrapper">
+          <span class="avatar" id="avatar" aria-hidden="true">…</span>
+          <span class="avatar-badge" aria-hidden="true">✓</span>
+        </div>
+        <div class="profile-title">
+          <span class="eyebrow-tag">PRIVATE STUDY SPACE</span>
+          <h1 id="heroName">Loading profile…</h1>
+          <p id="heroEmail" class="hero-email-text"></p>
         </div>
       </div>
-      <dl>
-        <div><dt>Google account</dt><dd id="googleEmail">—</dd></div>
-        <div><dt>Email status</dt><dd id="verified">—</dd></div>
-        <div><dt>Member since</dt><dd id="created">—</dd></div>
-        <div><dt>Last sign-in</dt><dd id="last">—</dd></div>
+      <dl class="passport-grid">
+        <div class="passport-item">
+          <dt>Google account</dt>
+          <dd id="googleEmail">—</dd>
+        </div>
+        <div class="passport-item">
+          <dt>Email status</dt>
+          <dd id="verified">—</dd>
+        </div>
+        <div class="passport-item">
+          <dt>Member since</dt>
+          <dd id="created">—</dd>
+        </div>
+        <div class="passport-item">
+          <dt>Last sign-in</dt>
+          <dd id="last">—</dd>
+        </div>
       </dl>
     </section>
 
+    <!-- Global Alert Message -->
+    <div class="alert" id="message" role="alert"></div>
+
+    <!-- 4-Card Workspace Grid -->
     <div class="dashboard-grid">
-      <section class="card-section">
+      <!-- 1. Profile Editing -->
+      <section class="card-section studio-card">
         <div class="section-header">
-          <h2>Student profile form</h2>
+          <div class="header-tag-row">
+            <span class="card-icon" aria-hidden="true">👤</span>
+            <h2>Student profile form</h2>
+          </div>
           <p id="profileState" class="small">Loading your student profile…</p>
         </div>
         <form id="studentProfileForm" class="form-grid">
           <label>
             Full name
-            <input id="fullName" name="fullName" type="text" autocomplete="name" required>
+            <input id="fullName" name="fullName" type="text" autocomplete="name" required placeholder="Enter your full name">
           </label>
           <label>
             Email
-            <input id="contactEmail" name="contactEmail" type="email" autocomplete="email" required>
+            <input id="contactEmail" name="contactEmail" type="email" autocomplete="email" required placeholder="student@example.com">
           </label>
           <label>
             Role
@@ -60,15 +87,19 @@
         </form>
       </section>
 
-      <section class="card-section">
+      <!-- 2. Note Upload -->
+      <section class="card-section studio-card">
         <div class="section-header">
-          <h2>Upload notes</h2>
+          <div class="header-tag-row">
+            <span class="card-icon" aria-hidden="true">📤</span>
+            <h2>Upload notes</h2>
+          </div>
           <p id="uploadHint" class="small">Loading upload options…</p>
         </div>
         <form id="noteUploadForm" class="form-grid" enctype="multipart/form-data">
           <label>
             Note title
-            <input id="noteTitle" name="title" type="text" placeholder="Physics class notes">
+            <input id="noteTitle" name="title" type="text" placeholder="e.g. Physics Quantum Mechanics Notes">
           </label>
           <label>
             Note file
@@ -77,64 +108,86 @@
           <button class="primary" id="uploadNote" type="submit">Upload private note</button>
         </form>
       </section>
-      <section class="card-section">
+
+      <!-- 3. Personal Note Writer -->
+      <section class="card-section studio-card">
         <div class="section-header">
-          <h2>Write personal note</h2>
+          <div class="header-tag-row">
+            <span class="card-icon" aria-hidden="true">📝</span>
+            <h2>Write personal note</h2>
+          </div>
           <p id="textNoteHint" class="small">Loading personal note options…</p>
         </div>
         <form id="textNoteForm" class="form-grid">
           <label>
             Note title
-            <input id="textNoteTitle" name="title" type="text" placeholder="Chapter 3 summary" required>
+            <input id="textNoteTitle" name="title" type="text" placeholder="e.g. Calculus Chapter 4 Formulas" required>
           </label>
           <label>
             Note content
-            <textarea id="textNoteContent" name="content" placeholder="Write your study notes here..." rows="4" required></textarea>
+            <textarea id="textNoteContent" name="content" placeholder="Write key equations, summary notes, or reminders..." rows="4" required></textarea>
           </label>
           <button class="primary" id="saveTextNote" type="submit">Save personal note</button>
         </form>
       </section>
 
-      <section class="card-section">
+      <!-- 4. Student Todo List -->
+      <section class="card-section studio-card">
         <div class="section-header">
-          <h2>Student Todo list</h2>
+          <div class="header-tag-row">
+            <span class="card-icon" aria-hidden="true">📋</span>
+            <h2>Student Todo list</h2>
+          </div>
           <p id="todoHint" class="small">Loading todo options…</p>
         </div>
         <form id="todoForm" class="form-grid">
           <label>
             New task
-            <input id="todoText" name="text" type="text" placeholder="Complete Math assignment" required>
+            <input id="todoText" name="text" type="text" placeholder="e.g. Complete Organic Chemistry lab report" required>
           </label>
           <button class="primary" id="addTodo" type="submit">Add Todo</button>
         </form>
-        <div id="todosEmpty" class="empty-state" style="margin-top: 16px;">No todo items yet. Add your first task above.</div>
+        <div id="todosEmpty" class="empty-state">No todo items yet. Add your first task above.</div>
         <div id="todosList" class="todo-list"></div>
       </section>
     </div>
 
-    <section class="card-section note-library" aria-label="Your personal written notes">
-      <div class="section-header">
-        <h2>Your personal written notes</h2>
-        <p class="small">These personal notes are visible only to your signed-in account.</p>
+    <!-- Personal Written Notes Library -->
+    <section class="card-section note-library studio-card" aria-label="Your personal written notes">
+      <div class="section-header library-header">
+        <div>
+          <h2>Your personal written notes</h2>
+          <p class="small">These personal notes are visible only to your signed-in account.</p>
+        </div>
+        <span class="library-count-tag" aria-hidden="true">Personal Desk</span>
       </div>
       <div id="textNotesEmpty" class="empty-state">No personal notes written yet. Write and save your first note above.</div>
       <div id="textNotesList" class="note-list"></div>
     </section>
 
-    <section class="card-section note-library" aria-label="Your notes library">
-      <div class="section-header">
-        <h2>Your uploaded file notes</h2>
-        <p class="small">These notes are scoped to your own signed-in account only.</p>
+    <!-- Uploaded File Notes Library -->
+    <section class="card-section note-library studio-card" aria-label="Your notes library">
+      <div class="section-header library-header">
+        <div>
+          <h2>Your uploaded file notes</h2>
+          <p class="small">These notes are scoped to your own signed-in account only.</p>
+        </div>
+        <span class="library-count-tag" aria-hidden="true">File Cabinet</span>
       </div>
       <div id="notesEmpty" class="empty-state">No notes yet. Save your student profile, then upload your first file.</div>
       <div id="notesList" class="note-list"></div>
     </section>
 
+    <!-- Session & Sign-out Actions -->
     <div class="dashboard-actions">
       <button class="secondary" id="logout">Sign out</button>
-      <p class="small">Signing out ends this session. Your student profile and uploaded notes remain in your private database and upload folder.</p>
+      <p class="small">Signing out ends this session. Your student profile, written notes, and uploaded files remain safely stored in your private account workspace.</p>
     </div>
   </main>
-  <footer><span>Private student note storage.</span><a href="/privacy">Privacy &amp; your data</a></footer>
+
+  <footer>
+    <span>Private student note storage · Nest Studio</span>
+    <a href="/privacy">Privacy &amp; your data</a>
+  </footer>
 </body>
 </html>
