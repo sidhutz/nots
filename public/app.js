@@ -56,6 +56,18 @@ if (profileForm && uploadForm && logout) {
   const textNoteContent = $('textNoteContent');
   const textNotesList = $('textNotesList');
   const textNotesEmpty = $('textNotesEmpty');
+  const autosaveStatus = $('autosaveStatus');
+  const noteSearch = $('noteSearch');
+  const noteTypeFilter = $('noteTypeFilter');
+  const noteDateFilter = $('noteDateFilter');
+  const noteSort = $('noteSort');
+  const noteLibraries = [...document.querySelectorAll('.note-library')];
+  let allFileNotes = [];
+  let allTextNotes = [];
+  let currentTextNoteId = null;
+  let autosaveTimer = null;
+  let autosaveInFlight = false;
+  let reminderTimer = null;
 
   const todoForm = $('todoForm');
   const todoHint = $('todoHint');
@@ -118,12 +130,40 @@ if (profileForm && uploadForm && logout) {
     const response = await fetch('/api/notes');
     if (!response.ok) throw Error('notes');
     const data = await response.json();
+    allFileNotes = data.notes || [];
+    renderNotes();
+  }
+
+  function filteredNotes(notes, kind) {
+    const query = noteSearch.value.trim().toLocaleLowerCase();
+    const days = Number(noteDateFilter.value || 0);
+    const oldest = days ? Date.now() - days * 86400000 : 0;
+    const filtered = notes.filter(note => {
+      const text = `${note.title || ''} ${note.originalName || ''} ${note.content || ''}`.toLocaleLowerCase();
+      return (!query || text.includes(query)) && (!oldest || new Date(note.createdAt).getTime() >= oldest);
+    });
+    filtered.sort((a, b) => {
+      if (noteSort.value === 'title') return String(a.title).localeCompare(String(b.title));
+      const delta = new Date(a.createdAt) - new Date(b.createdAt);
+      return noteSort.value === 'oldest' ? delta : -delta;
+    });
+    return filtered;
+  }
+
+  function renderNotes() {
+    const showFiles = noteTypeFilter.value !== 'written';
+    const showWritten = noteTypeFilter.value !== 'file';
+    noteLibraries[0].hidden = !showWritten;
+    noteLibraries[1].hidden = !showFiles;
     notesList.innerHTML = '';
-    const notes = data.notes || [];
+    const notes = filteredNotes(allFileNotes, 'file');
     notesEmpty.hidden = notes.length > 0;
+    if (!notes.length && allFileNotes.length) notesEmpty.textContent = 'No uploaded files match these filters.';
+    else notesEmpty.textContent = 'No notes yet. Save your student profile, then upload your first file.';
     for (const note of notes) {
       const card = document.createElement('article');
       card.className = 'note-card';
+      const canPreview = note.mimeType === 'application/pdf' || /^image\/(png|jpeg|gif|webp)$/.test(note.mimeType || '');
       card.innerHTML = `
         <div class="note-copy">
           <h3>${escapeHtml(note.title)}</h3>
@@ -131,6 +171,7 @@ if (profileForm && uploadForm && logout) {
           <div class="note-meta">${formatBytes(note.sizeBytes)} · Uploaded ${formatDate(note.createdAt)}</div>
         </div>
         <div class="note-actions">
+          ${canPreview ? `<button class="secondary" type="button" data-preview-url="${note.previewUrl}" data-preview-type="${escapeHtml(note.mimeType)}" data-preview-name="${escapeHtml(note.title)}">Preview</button>` : ''}
           <a class="secondary link-button" href="${note.downloadUrl}">Download</a>
           <button class="ghost danger" type="button" data-note-id="${note.id}">Delete</button>
         </div>`;
@@ -143,9 +184,16 @@ if (profileForm && uploadForm && logout) {
     const response = await fetch('/api/text-notes');
     if (!response.ok) throw Error('text-notes');
     const data = await response.json();
+    allTextNotes = data.textNotes || [];
+    renderTextNotes();
+  }
+
+  function renderTextNotes() {
     textNotesList.innerHTML = '';
-    const notes = data.textNotes || [];
+    const notes = filteredNotes(allTextNotes, 'written');
     textNotesEmpty.hidden = notes.length > 0;
+    if (!notes.length && allTextNotes.length) textNotesEmpty.textContent = 'No written notes match these filters.';
+    else textNotesEmpty.textContent = 'No personal notes written yet. Write and save your first note above.';
     for (const note of notes) {
       const card = document.createElement('article');
       card.className = 'note-card text-note-card';
@@ -156,6 +204,7 @@ if (profileForm && uploadForm && logout) {
           <div class="note-meta">Created ${formatDate(note.createdAt)}</div>
         </div>
         <div class="note-actions">
+          <button class="secondary" type="button" data-edit-text-note="${note.id}">Edit</button>
           <button class="ghost danger" type="button" data-text-note-id="${note.id}">Delete</button>
         </div>`;
       textNotesList.append(card);
@@ -169,15 +218,30 @@ if (profileForm && uploadForm && logout) {
     const data = await response.json();
     todosList.innerHTML = '';
     const todos = data.todos || [];
+    window.currentTodos = todos;
+    todos.sort((a, b) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      if (!a.dueAt) return b.dueAt ? 1 : 0;
+      if (!b.dueAt) return -1;
+      return new Date(a.dueAt) - new Date(b.dueAt);
+    });
     todosEmpty.hidden = todos.length > 0;
     for (const todo of todos) {
+      const localDueAt = todo.dueAt ? new Date(todo.dueAt) : null;
+      const localDueValue = localDueAt && !Number.isNaN(localDueAt.getTime())
+        ? new Date(localDueAt.getTime() - localDueAt.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+        : '';
       const item = document.createElement('div');
-      item.className = `todo-item ${todo.completed ? 'completed' : ''}`;
+      const overdue = todo.dueAt && !todo.completed && new Date(todo.dueAt) < new Date();
+      item.className = `todo-item ${todo.completed ? 'completed' : ''} ${overdue ? 'overdue' : ''}`;
       item.innerHTML = `
         <label class="todo-label">
           <input type="checkbox" class="todo-checkbox" data-todo-toggle="${todo.id}" ${todo.completed ? 'checked' : ''}>
           <span class="todo-text">${escapeHtml(todo.text)}</span>
         </label>
+        <div class="todo-detail">${todo.dueAt ? `<time datetime="${escapeHtml(todo.dueAt)}">Due ${formatDate(todo.dueAt)}</time>` : '<span>No due date</span>'}
+          <label class="reschedule-label">Change due<input type="datetime-local" data-todo-due="${todo.id}" value="${localDueValue}"></label>
+        </div>
         <button class="ghost danger" type="button" data-todo-id="${todo.id}">Delete</button>`;
       todosList.append(item);
     }
@@ -192,7 +256,173 @@ if (profileForm && uploadForm && logout) {
       .replace(/'/g, '&#039;');
   }
 
+  function setAutosaveLabel(text, tone = '') {
+    if (!autosaveStatus) return;
+    autosaveStatus.textContent = text;
+    autosaveStatus.dataset.tone = tone;
+  }
+
+  function rememberDraft() {
+    if (!currentUser) return;
+    const draftKey = `student-notes-draft:${currentUser.id}`;
+    const draft = { title: textNoteTitle.value, content: textNoteContent.value, noteId: currentTextNoteId, savedAt: new Date().toISOString() };
+    localStorage.setItem(draftKey, JSON.stringify(draft));
+    setAutosaveLabel('Draft saved on this device…');
+  }
+
+  async function saveTextNoteNow() {
+    if (autosaveInFlight) return;
+    const title = textNoteTitle.value.trim();
+    const content = textNoteContent.value.trim();
+    if (!title || !content) {
+      setAutosaveLabel('Add a title and some text to save to your account.');
+      return;
+    }
+    autosaveInFlight = true;
+    setAutosaveLabel('Saving to your account…');
+    try {
+      const response = await fetch(currentTextNoteId ? `/api/text-notes/${currentTextNoteId}` : '/api/text-notes', {
+        method: currentTextNoteId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error || 'Autosave failed.');
+      currentTextNoteId = data.textNote.id;
+      if (currentUser) localStorage.removeItem(`student-notes-draft:${currentUser.id}`);
+      setAutosaveLabel(`Saved to your account · ${formatDate(data.textNote.updatedAt || data.textNote.createdAt)}`, 'success');
+      await loadTextNotes();
+      if (textNoteTitle.value.trim() !== title || textNoteContent.value.trim() !== content) scheduleAutosave(250);
+    } catch (error) {
+      setAutosaveLabel(`${error.message || 'Autosave failed.'} Your latest draft is still on this device.`, 'warning');
+    } finally {
+      autosaveInFlight = false;
+    }
+  }
+
+  function scheduleAutosave(delay = 800) {
+    rememberDraft();
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(saveTextNoteNow, delay);
+  }
+
+  function applyNoteFilters() {
+    renderTextNotes();
+    renderNotes();
+  }
+
+  for (const control of [noteSearch, noteTypeFilter, noteDateFilter, noteSort]) {
+    control?.addEventListener(control === noteSearch ? 'input' : 'change', applyNoteFilters);
+  }
+
+  $('themeToggle')?.addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem('student-notes-theme', next);
+    $('themeToggle').textContent = next === 'dark' ? 'Light mode' : 'Dark mode';
+    $('themeToggle').setAttribute('aria-pressed', String(next === 'dark'));
+  });
+
+  const savedTheme = localStorage.getItem('student-notes-theme');
+  if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+  if ($('themeToggle')) {
+    $('themeToggle').textContent = document.documentElement.dataset.theme === 'dark' ? 'Light mode' : 'Dark mode';
+    $('themeToggle').setAttribute('aria-pressed', String(document.documentElement.dataset.theme === 'dark'));
+  }
+
+  $('printNotes')?.addEventListener('click', () => {
+    $('printDate').textContent = `Exported ${new Date().toLocaleString()}`;
+    window.print();
+  });
+
+  $('closePreview')?.addEventListener('click', () => $('filePreviewDialog').close());
+  $('filePreviewDialog')?.addEventListener('close', () => $('previewContent').replaceChildren());
+
+  $('enableReminders')?.addEventListener('click', async () => {
+    if (!('Notification' in window)) {
+      $('reminderStatus').textContent = 'This browser does not support notifications.';
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    $('reminderStatus').textContent = permission === 'granted'
+      ? 'Reminders enabled while this dashboard stays open.'
+      : 'Notifications are off. You can still see due dates in your task list.';
+    if (permission === 'granted') checkDueReminders();
+  });
+
+  function checkDueReminders() {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const reminded = new Set(JSON.parse(sessionStorage.getItem('reminded-todos') || '[]'));
+    for (const todo of window.currentTodos || []) {
+      if (!todo.completed && todo.dueAt && new Date(todo.dueAt) <= new Date() && !reminded.has(String(todo.id))) {
+        new Notification('Study task due', { body: todo.text, tag: `todo-${todo.id}` });
+        reminded.add(String(todo.id));
+      }
+    }
+    sessionStorage.setItem('reminded-todos', JSON.stringify([...reminded]));
+  }
+
+  $('exportData')?.addEventListener('click', async () => {
+    const button = $('exportData');
+    button.disabled = true;
+    try {
+      const response = await fetch('/api/account/export');
+      if (!response.ok) throw Error('Could not export your account data.');
+      const blob = new Blob([JSON.stringify(await response.json(), null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'student-hub-data.json';
+      link.click();
+      URL.revokeObjectURL(link.href);
+      setMessage('Your account data export is ready.', 'success');
+    } catch (error) {
+      setMessage(error.message || 'Export failed.');
+    } finally { button.disabled = false; }
+  });
+
+  $('deleteAccount')?.addEventListener('click', () => {
+    $('deleteAccountConfirmation').value = '';
+    $('deleteAccountDialog').showModal();
+  });
+
+  $('deleteAccountForm')?.addEventListener('submit', async event => {
+    if (event.submitter?.value !== 'confirm') return;
+    event.preventDefault();
+    if ($('deleteAccountConfirmation').value !== 'DELETE') {
+      setMessage('Type DELETE exactly to confirm account removal.');
+      return;
+    }
+    const button = $('confirmDeleteAccount');
+    button.disabled = true;
+    try {
+      const response = await fetch('/api/account', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirmation: 'DELETE' }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error || 'Account deletion failed.');
+      localStorage.removeItem(`student-notes-draft:${currentUser.id}`);
+      location.replace('/?accountDeleted=1');
+    } catch (error) {
+      setMessage(error.message || 'Account deletion failed.');
+      $('deleteAccountDialog').close();
+      button.disabled = false;
+    }
+  });
+
   notesList.addEventListener('click', async event => {
+    const preview = event.target.closest('button[data-preview-url]');
+    if (preview) {
+      const content = $('previewContent');
+      content.replaceChildren();
+      $('previewTitle').textContent = `Preview · ${preview.dataset.previewName}`;
+      const element = document.createElement(preview.dataset.previewType === 'application/pdf' ? 'iframe' : 'img');
+      element.src = preview.dataset.previewUrl;
+      element.title = preview.dataset.previewName;
+      if (element.tagName === 'IMG') element.alt = preview.dataset.previewName;
+      content.append(element);
+      $('filePreviewDialog').showModal();
+      return;
+    }
     const button = event.target.closest('button[data-note-id]');
     if (!button) return;
     button.disabled = true;
@@ -211,6 +441,19 @@ if (profileForm && uploadForm && logout) {
 
   if (textNotesList) {
     textNotesList.addEventListener('click', async event => {
+      const edit = event.target.closest('button[data-edit-text-note]');
+      if (edit) {
+        const note = allTextNotes.find(item => String(item.id) === edit.dataset.editTextNote);
+        if (!note) return;
+        clearTimeout(autosaveTimer);
+        currentTextNoteId = note.id;
+        textNoteTitle.value = note.title;
+        textNoteContent.value = note.content;
+        setAutosaveLabel(`Editing note · last saved ${formatDate(note.updatedAt || note.createdAt)}`);
+        textNoteForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        textNoteTitle.focus();
+        return;
+      }
       const button = event.target.closest('button[data-text-note-id]');
       if (!button) return;
       button.disabled = true;
@@ -220,6 +463,11 @@ if (profileForm && uploadForm && logout) {
         const data = await response.json();
         if (!response.ok) throw Error(data.error || 'Delete failed.');
         await loadTextNotes();
+        if (String(currentTextNoteId) === button.dataset.textNoteId) {
+          currentTextNoteId = null;
+          textNoteForm.reset();
+          setAutosaveLabel('Deleted note. Start a new note whenever you are ready.');
+        }
         setMessage('Personal note deleted.', 'success');
       } catch (error) {
         setMessage(error.message || 'Delete failed.');
@@ -230,6 +478,24 @@ if (profileForm && uploadForm && logout) {
 
   if (todosList) {
     todosList.addEventListener('change', async event => {
+      const dueInput = event.target.closest('input[data-todo-due]');
+      if (dueInput) {
+        dueInput.disabled = true;
+        try {
+          const response = await fetch(`/api/todos/${dueInput.dataset.todoDue}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dueAt: dueInput.value ? new Date(dueInput.value).toISOString() : null }),
+          });
+          const data = await response.json();
+          if (!response.ok) throw Error(data.error || 'Could not update due date.');
+          await loadTodos();
+          setMessage('Reminder due date updated.', 'success');
+        } catch (error) {
+          setMessage(error.message || 'Could not update due date.');
+          dueInput.disabled = false;
+        }
+        return;
+      }
       const checkbox = event.target.closest('input[data-todo-toggle]');
       if (!checkbox) return;
       clearMessage();
@@ -316,30 +582,21 @@ if (profileForm && uploadForm && logout) {
   });
 
   if (textNoteForm) {
+    textNoteForm.addEventListener('input', event => {
+      if (event.target === textNoteTitle || event.target === textNoteContent) scheduleAutosave();
+    });
     textNoteForm.addEventListener('submit', async event => {
       event.preventDefault();
-      clearMessage();
-      const submit = $('saveTextNote');
-      submit.disabled = true;
-      try {
-        const response = await fetch('/api/text-notes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: textNoteTitle.value,
-            content: textNoteContent.value,
-          }),
-        });
-        const data = await response.json();
-        if (!response.ok) throw Error(data.error || 'Failed to save personal note.');
-        textNoteForm.reset();
-        await loadTextNotes();
-        setMessage('Personal note saved.', 'success');
-      } catch (error) {
-        setMessage(error.message || 'Failed to save personal note.');
-      } finally {
-        submit.disabled = false;
-      }
+      clearTimeout(autosaveTimer);
+      await saveTextNoteNow();
+    });
+    $('newTextNote').addEventListener('click', () => {
+      clearTimeout(autosaveTimer);
+      currentTextNoteId = null;
+      textNoteForm.reset();
+      if (currentUser) localStorage.removeItem(`student-notes-draft:${currentUser.id}`);
+      setAutosaveLabel('New note · changes save automatically.');
+      textNoteTitle.focus();
     });
   }
 
@@ -355,6 +612,7 @@ if (profileForm && uploadForm && logout) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             text: todoText.value,
+            dueAt: $('todoDueAt').value ? new Date($('todoDueAt').value).toISOString() : null,
           }),
         });
         const data = await response.json();
@@ -388,6 +646,21 @@ if (profileForm && uploadForm && logout) {
       await loadNotes();
       await loadTextNotes();
       await loadTodos();
+      if (reminderTimer) clearInterval(reminderTimer);
+      reminderTimer = setInterval(checkDueReminders, 30000);
+      checkDueReminders();
+      if (currentUser) {
+        const draft = localStorage.getItem(`student-notes-draft:${currentUser.id}`);
+        if (draft && !textNoteTitle.value && !textNoteContent.value) {
+          try {
+            const savedDraft = JSON.parse(draft);
+            currentTextNoteId = savedDraft.noteId || null;
+            textNoteTitle.value = savedDraft.title || '';
+            textNoteContent.value = savedDraft.content || '';
+            setAutosaveLabel('Restored an unsaved draft from this device.');
+          } catch { localStorage.removeItem(`student-notes-draft:${currentUser.id}`); }
+        }
+      }
     } catch {
       setMessage('Unable to load your dashboard. Please refresh the page.');
     }

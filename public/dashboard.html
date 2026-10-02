@@ -16,6 +16,8 @@
     </a>
     <div class="header-actions">
       <span class="status"><span class="pulse-dot" aria-hidden="true"></span> Signed in with Google</span>
+      <button class="secondary" id="themeToggle" type="button" aria-pressed="false">Dark mode</button>
+      <button class="secondary" id="printNotes" type="button">Export / print</button>
       <a href="/privacy" class="header-link">Privacy</a>
     </div>
   </header>
@@ -57,10 +59,22 @@
     <!-- Global Alert Message -->
     <div class="alert" id="message" role="alert"></div>
 
+    <section class="card-section studio-card library-tools no-print" aria-label="Find notes">
+      <div class="section-header library-header">
+        <div><h2>Find and organize notes</h2><p class="small">Search titles, file names, and written note content.</p></div>
+      </div>
+      <div class="filter-row">
+        <label class="filter-search">Search notes<input id="noteSearch" type="search" placeholder="Search your notes…" autocomplete="off"></label>
+        <label>Type<select id="noteTypeFilter"><option value="all">All notes</option><option value="written">Written notes</option><option value="file">Uploaded files</option></select></label>
+        <label>When<select id="noteDateFilter"><option value="all">Any time</option><option value="7">Past 7 days</option><option value="30">Past 30 days</option></select></label>
+        <label>Sort<select id="noteSort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="title">Title A–Z</option></select></label>
+      </div>
+    </section>
+
     <!-- 4-Card Workspace Grid -->
     <div class="dashboard-grid">
       <!-- 1. Profile Editing -->
-      <section class="card-section studio-card">
+      <section class="card-section studio-card no-print" id="profileSettings">
         <div class="section-header">
           <div class="header-tag-row">
             <span class="card-icon" aria-hidden="true">👤</span>
@@ -88,7 +102,7 @@
       </section>
 
       <!-- 2. Note Upload -->
-      <section class="card-section studio-card">
+      <section class="card-section studio-card no-print">
         <div class="section-header">
           <div class="header-tag-row">
             <span class="card-icon" aria-hidden="true">📤</span>
@@ -110,7 +124,7 @@
       </section>
 
       <!-- 3. Personal Note Writer -->
-      <section class="card-section studio-card">
+      <section class="card-section studio-card no-print">
         <div class="section-header">
           <div class="header-tag-row">
             <span class="card-icon" aria-hidden="true">📝</span>
@@ -127,12 +141,16 @@
             Note content
             <textarea id="textNoteContent" name="content" placeholder="Write key equations, summary notes, or reminders..." rows="4" required></textarea>
           </label>
-          <button class="primary" id="saveTextNote" type="submit">Save personal note</button>
+          <div class="editor-actions">
+            <button class="primary" id="saveTextNote" type="submit">Save personal note</button>
+            <button class="secondary" id="newTextNote" type="button">New note</button>
+            <span id="autosaveStatus" class="small" role="status" aria-live="polite">Changes save automatically.</span>
+          </div>
         </form>
       </section>
 
       <!-- 4. Student Todo List -->
-      <section class="card-section studio-card">
+      <section class="card-section studio-card no-print">
         <div class="section-header">
           <div class="header-tag-row">
             <span class="card-icon" aria-hidden="true">📋</span>
@@ -145,8 +163,15 @@
             New task
             <input id="todoText" name="text" type="text" placeholder="e.g. Complete Organic Chemistry lab report" required>
           </label>
+          <label>Due date and time (optional)
+            <input id="todoDueAt" name="dueAt" type="datetime-local">
+          </label>
           <button class="primary" id="addTodo" type="submit">Add Todo</button>
         </form>
+        <div class="reminder-controls no-print">
+          <p id="reminderStatus" class="small">Reminders appear while this dashboard is open.</p>
+          <button class="secondary" id="enableReminders" type="button">Enable browser reminders</button>
+        </div>
         <div id="todosEmpty" class="empty-state">No todo items yet. Add your first task above.</div>
         <div id="todosList" class="todo-list"></div>
       </section>
@@ -178,12 +203,35 @@
       <div id="notesList" class="note-list"></div>
     </section>
 
+    <section class="card-section studio-card account-settings no-print" aria-label="Account and privacy settings">
+      <div class="section-header"><h2>Account &amp; privacy controls</h2><p class="small">Manage your profile and take a copy of your data.</p></div>
+      <div class="account-controls">
+        <button class="secondary" id="exportData" type="button">Download my data</button>
+        <button class="ghost danger" id="deleteAccount" type="button">Delete my account and data</button>
+      </div>
+      <p class="small">Account deletion permanently removes your profile, notes, uploaded files, tasks, and sessions.</p>
+    </section>
+
     <!-- Session & Sign-out Actions -->
     <div class="dashboard-actions">
       <button class="secondary" id="logout">Sign out</button>
       <p class="small">Signing out ends this session. Your student profile, written notes, and uploaded files remain safely stored in your private account workspace.</p>
     </div>
   </main>
+
+  <dialog id="filePreviewDialog" class="preview-dialog" aria-labelledby="previewTitle">
+    <div class="preview-dialog-head"><h2 id="previewTitle">File preview</h2><button class="secondary" id="closePreview" type="button">Close</button></div>
+    <div id="previewContent" class="preview-content"></div>
+  </dialog>
+  <dialog id="deleteAccountDialog" class="confirm-dialog" aria-labelledby="deleteAccountTitle">
+    <form id="deleteAccountForm" method="dialog">
+      <h2 id="deleteAccountTitle">Delete account data?</h2>
+      <p>This permanently deletes your account, notes, uploaded files, tasks, and active sessions. Type <strong>DELETE</strong> to confirm.</p>
+      <label>Confirmation<input id="deleteAccountConfirmation" type="text" autocomplete="off" required></label>
+      <div class="dialog-actions"><button class="secondary" value="cancel">Cancel</button><button class="primary danger-fill" id="confirmDeleteAccount" value="confirm" type="submit">Delete everything</button></div>
+    </form>
+  </dialog>
+  <div class="printable-header"><h1>My study notes</h1><p id="printDate"></p></div>
 
   <footer>
     <span>Private student note storage · Nest Studio</span>

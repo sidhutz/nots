@@ -186,6 +186,7 @@ function noteJson(note) {
   return {
     ...note,
     downloadUrl: `/api/notes/${note.id}/download`,
+    previewUrl: `/api/notes/${note.id}/preview`,
   };
 }
 
@@ -329,7 +330,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 201, { note: noteJson(note) });
     }
 
-    const noteMatch = url.pathname.match(/^\/api\/notes\/(\d+)(?:\/(download))?$/);
+    const noteMatch = url.pathname.match(/^\/api\/notes\/(\d+)(?:\/(download|preview))?$/);
     if (noteMatch) {
       const noteId = Number(noteMatch[1]);
       const action = noteMatch[2] || 'delete';
@@ -337,14 +338,21 @@ const server = http.createServer(async (req, res) => {
       if (!user) return;
       const note = await store.getNoteByIdForUser(noteId, user.id);
       if (!note) return json(res, 404, { error: 'Note not found.' });
-      if (action === 'download' && req.method === 'GET') {
+      if ((action === 'download' || action === 'preview') && req.method === 'GET') {
+        if (action === 'preview' && note.mimeType !== 'application/pdf' && !/^image\/(png|jpeg|gif|webp)$/.test(note.mimeType || '')) {
+          return json(res, 415, { error: 'Preview is available for PDF and common image files.' });
+        }
         let file;
         try { file = await store.downloadNote(note.storedName); } catch { return json(res, 404, { error: 'Stored file not found.' }); }
-        audit(user.id, 'note_downloaded', { noteId: note.id });
+        audit(user.id, action === 'preview' ? 'note_previewed' : 'note_downloaded', { noteId: note.id });
         res.writeHead(200, {
           'Content-Type': note.mimeType || 'application/octet-stream',
           'Content-Length': String(file.length),
-          'Content-Disposition': `attachment; filename="${sanitizeFilename(note.originalName).replace(/"/g, '')}"`,
+          'Content-Disposition': `${action === 'preview' ? 'inline' : 'attachment'}; filename="${sanitizeFilename(note.originalName).replace(/"/g, '')}"`,
+          ...(action === 'preview' ? {
+            'X-Frame-Options': 'SAMEORIGIN',
+            'Content-Security-Policy': "default-src 'self'; frame-ancestors 'self'; object-src 'none'",
+          } : {}),
         });
         return res.end(file);
       }
@@ -419,8 +427,10 @@ const server = http.createServer(async (req, res) => {
       if (!user.profile_completed) return json(res, 400, { error: 'Save your student profile before adding todos.' });
       const body = await readJson(req);
       const text = sanitizeText(body.text, 200);
+      const dueAt = body.dueAt ? new Date(body.dueAt) : null;
       if (!text) return json(res, 400, { error: 'Todo text is required.' });
-      const todo = await store.createTodo({ userId: user.id, text });
+      if (body.dueAt && Number.isNaN(dueAt.getTime())) return json(res, 400, { error: 'Choose a valid reminder date and time.' });
+      const todo = await store.createTodo({ userId: user.id, text, dueAt: dueAt?.toISOString() || null });
       audit(user.id, 'todo_created', { todoId: todo.id });
       return json(res, 201, { todo });
     }
@@ -436,7 +446,17 @@ const server = http.createServer(async (req, res) => {
         if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
         const body = await readJson(req);
         const completed = body.completed !== undefined ? Boolean(body.completed) : existing.completed;
-        const updated = await store.toggleTodoForUser(todoId, user.id, completed);
+        let dueAt = existing.dueAt;
+        if (body.dueAt !== undefined) {
+          if (body.dueAt === null || body.dueAt === '') {
+            dueAt = null;
+          } else {
+            const parsedDueAt = new Date(body.dueAt);
+            if (Number.isNaN(parsedDueAt.getTime())) return json(res, 400, { error: 'Choose a valid reminder date and time.' });
+            dueAt = parsedDueAt.toISOString();
+          }
+        }
+        const updated = await store.updateTodoForUser(todoId, user.id, { completed, dueAt });
         audit(user.id, 'todo_updated', { todoId, completed });
         return json(res, 200, { todo: updated });
       }
@@ -446,6 +466,31 @@ const server = http.createServer(async (req, res) => {
         audit(user.id, 'todo_deleted', { todoId });
         return json(res, 200, { ok: true });
       }
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/account/export') {
+      const user = await requireUser(req, res);
+      if (!user) return;
+      audit(user.id, 'account_exported');
+      return json(res, 200, {
+        exportedAt: new Date().toISOString(),
+        profile: formatUser(user),
+        uploadedNotes: await store.listNotesByUser(user.id),
+        writtenNotes: await store.listTextNotesByUser(user.id),
+        tasks: await store.listTodosByUser(user.id),
+        activity: await store.listActivityByUser(user.id),
+      });
+    }
+
+    if (req.method === 'DELETE' && url.pathname === '/api/account') {
+      if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
+      const user = await requireUser(req, res);
+      if (!user) return;
+      const body = await readJson(req);
+      if (body.confirmation !== 'DELETE') return json(res, 400, { error: 'Type DELETE to confirm account removal.' });
+      await store.deleteAccount(user.id);
+      res.setHeader('Set-Cookie', cookie('sid', '', 0));
+      return json(res, 200, { ok: true });
     }
 
     if (req.method === 'POST' && url.pathname === '/auth/logout') {

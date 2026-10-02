@@ -136,20 +136,20 @@ export function openSupabaseStore({ url, secretKey }) {
     async deleteTextNoteByIdForUser(noteId, userId) {
       await write('text_notes', 'DELETE', `id=eq.${filter(noteId)}&user_id=eq.${filter(userId)}`, undefined, 'return=minimal');
     },
-    async createTodo({ userId, text }) {
-      const result = await write('todos', 'POST', '', { user_id: userId, text });
+    async createTodo({ userId, text, dueAt = null }) {
+      const result = await write('todos', 'POST', '', { user_id: userId, text, ...(dueAt ? { due_at: dueAt } : {}) });
       const row = result[0];
-      return { id: row.id, text: row.text, completed: Boolean(row.completed), createdAt: row.created_at };
+      return { id: row.id, text: row.text, completed: Boolean(row.completed), dueAt: row.due_at, createdAt: row.created_at };
     },
     async listTodosByUser(userId) {
-      return (await rows('todos', `select=*&user_id=eq.${filter(userId)}&order=id.desc`)).map(row => ({ id: row.id, text: row.text, completed: Boolean(row.completed), createdAt: row.created_at }));
+      return (await rows('todos', `select=*&user_id=eq.${filter(userId)}&order=id.desc`)).map(row => ({ id: row.id, text: row.text, completed: Boolean(row.completed), dueAt: row.due_at, createdAt: row.created_at }));
     },
     async getTodoByIdForUser(todoId, userId) {
       const row = await one('todos', `select=*&id=eq.${filter(todoId)}&user_id=eq.${filter(userId)}`);
-      return row && { id: row.id, userId: row.user_id, text: row.text, completed: Boolean(row.completed), createdAt: row.created_at };
+      return row && { id: row.id, userId: row.user_id, text: row.text, completed: Boolean(row.completed), dueAt: row.due_at, createdAt: row.created_at };
     },
-    async toggleTodoForUser(todoId, userId, completed) {
-      await write('todos', 'PATCH', `id=eq.${filter(todoId)}&user_id=eq.${filter(userId)}`, { completed });
+    async updateTodoForUser(todoId, userId, { completed, dueAt }) {
+      await write('todos', 'PATCH', `id=eq.${filter(todoId)}&user_id=eq.${filter(userId)}`, { completed, due_at: dueAt });
       return this.getTodoByIdForUser(todoId, userId);
     },
     async deleteTodoForUser(todoId, userId) {
@@ -157,6 +157,15 @@ export function openSupabaseStore({ url, secretKey }) {
     },
     async logActivity(userId, eventType, details = {}) {
       await write('activity_log', 'POST', '', { user_id: userId || null, event_type: eventType, details });
+    },
+    async listActivityByUser(userId) {
+      return rows('activity_log', `select=id,event_type,details,created_at&user_id=eq.${filter(userId)}&order=id.desc`);
+    },
+    async deleteAccount(userId) {
+      const files = await rows('notes', `select=stored_name&user_id=eq.${filter(userId)}`);
+      for (const file of files) await this.deleteNoteFile(file.stored_name);
+      await write('activity_log', 'DELETE', `user_id=eq.${filter(userId)}`, undefined, 'return=minimal');
+      await write('users', 'DELETE', `id=eq.${filter(userId)}`, undefined, 'return=minimal');
     },
     async cleanup() {
       const now = Date.now();

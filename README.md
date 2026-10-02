@@ -95,6 +95,20 @@ karta hai. Non-empty Supabase tables hon to migration ruk jaati hai.
 - Supabase tables par RLS enabled hai aur Storage bucket private hai. Website
   backend hi server-only Supabase key ke through access karta hai.
 
+## Dashboard features and Supabase update
+
+The dashboard includes note search, type/date filters and sorting; automatic
+personal-note saving with a device-local draft recovery copy; private PDF/image
+previews; task due dates and opt-in browser notifications; a saved light/dark
+theme; print-friendly notes; JSON data export; and account/data deletion.
+Browser reminders work while the dashboard is open. They are not background
+push notifications.
+
+If the existing Supabase project was created before task due dates were added,
+run `supabase-migrations/20261002_todo_due_at.sql` once in the Supabase SQL
+Editor. For a new Supabase setup, `supabase-schema.sql` already includes this
+column. After applying it, redeploy the app so the dashboard feature is live.
+
 ## Useful commands
 
 Config presence/format check:
@@ -108,6 +122,9 @@ Tests:
 ```bash
 npm test
 ```
+
+project url "https://student-hub-w34g.onrender.com/"
+
 
 Saved note metadata dekhne ke liye:
 
