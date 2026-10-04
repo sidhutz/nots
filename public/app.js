@@ -266,8 +266,12 @@ if (profileForm && uploadForm && logout) {
     if (!currentUser) return;
     const draftKey = `student-notes-draft:${currentUser.id}`;
     const draft = { title: textNoteTitle.value, content: textNoteContent.value, noteId: currentTextNoteId, savedAt: new Date().toISOString() };
-    localStorage.setItem(draftKey, JSON.stringify(draft));
-    setAutosaveLabel('Draft saved on this device…');
+    try {
+      localStorage.setItem(draftKey, JSON.stringify(draft));
+      setAutosaveLabel('Draft saved on this device…');
+    } catch {
+      setAutosaveLabel('Device draft storage is unavailable; trying to save to your account…', 'warning');
+    }
   }
 
   async function saveTextNoteNow() {
@@ -352,7 +356,14 @@ if (profileForm && uploadForm && logout) {
 
   function checkDueReminders() {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    const reminded = new Set(JSON.parse(sessionStorage.getItem('reminded-todos') || '[]'));
+    let rememberedIds = [];
+    try {
+      const saved = JSON.parse(sessionStorage.getItem('reminded-todos') || '[]');
+      if (Array.isArray(saved)) rememberedIds = saved;
+    } catch {
+      sessionStorage.removeItem('reminded-todos');
+    }
+    const reminded = new Set(rememberedIds);
     for (const todo of window.currentTodos || []) {
       if (!todo.completed && todo.dueAt && new Date(todo.dueAt) <= new Date() && !reminded.has(String(todo.id))) {
         new Notification('Study task due', { body: todo.text, tag: `todo-${todo.id}` });
@@ -370,10 +381,11 @@ if (profileForm && uploadForm && logout) {
       if (!response.ok) throw Error('Could not export your account data.');
       const blob = new Blob([JSON.stringify(await response.json(), null, 2)], { type: 'application/json' });
       const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
+      const exportUrl = URL.createObjectURL(blob);
+      link.href = exportUrl;
       link.download = 'student-hub-data.json';
       link.click();
-      URL.revokeObjectURL(link.href);
+      setTimeout(() => URL.revokeObjectURL(exportUrl), 1000);
       setMessage('Your account data export is ready.', 'success');
     } catch (error) {
       setMessage(error.message || 'Export failed.');

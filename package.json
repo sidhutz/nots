@@ -10,6 +10,6 @@
     "start": "node server.mjs",
     "check": "node check-config.mjs",
     "migrate:supabase": "node migrate-to-supabase.mjs",
-    "test": "node --test test.mjs config.test.mjs"
+    "test": "node --test test.mjs config.test.mjs supabase-store.test.mjs"
   }
 }
