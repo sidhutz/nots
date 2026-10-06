@@ -39,3 +39,10 @@ test('open comment panels refresh and poll for comments from other students', ()
   assert.doesNotMatch(server, /if \(action === 'comments'\)[\s\S]{0,400}profile_completed/);
   assert.match(app, /data-comment-status aria-live="polite"/);
 });
+
+test('persistent login survives browser restarts and renews while active', () => {
+  assert.match(server, /SESSION_TTL_SECONDS = 365 \* 24 \* 60 \* 60/);
+  assert.match(server, /Expires=\$\{new Date\(Date\.now\(\) \+ age \* 1000\)\.toUTCString\(\)\}/);
+  assert.match(server, /store\.extendSession\(tokenHash, now \+ SESSION_TTL_MS\)/);
+  assert.match(server, /cookie\('sid', sid, SESSION_TTL_SECONDS\)/);
+});

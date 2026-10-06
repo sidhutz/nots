@@ -11,12 +11,15 @@ const secure = base.startsWith('https:');
 const callback = base + '/auth/google/callback';
 if (!config.supabaseUrl || !config.supabaseSecretKey) throw Error('Supabase is not configured. Set SUPABASE_URL and SUPABASE_SECRET_KEY in .env.');
 const store = openSupabaseStore({ url: config.supabaseUrl, secretKey: config.supabaseSecretKey });
+const SESSION_TTL_SECONDS = 365 * 24 * 60 * 60;
+const SESSION_TTL_MS = SESSION_TTL_SECONDS * 1000;
+const sessionRenewals = new Map();
 
 const random = () => randomBytes(32).toString('base64url');
 const randomHex = size => randomBytes(size).toString('hex');
 const hash = value => createHash('sha256').update(value).digest('hex');
 const same = (a, b) => typeof a === 'string' && typeof b === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
-const cookie = (name, value, age) => `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${secure ? '; Secure' : ''}`;
+const cookie = (name, value, age) => `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}; Expires=${new Date(Date.now() + age * 1000).toUTCString()}${secure ? '; Secure' : ''}`;
 const assets = new Map([
   ['/', ['text/html; charset=utf-8', readFileSync(new URL('./public/index.html', import.meta.url))]],
   ['/dashboard', ['text/html; charset=utf-8', readFileSync(new URL('./public/dashboard.html', import.meta.url))]],
@@ -70,14 +73,30 @@ function sameOrigin(req) {
   return !req.headers.origin || req.headers.origin === base;
 }
 
-async function getSessionUser(req) {
+async function getSessionUser(req, res) {
   const token = req.cookies.sid;
   if (!token) return null;
-  return store.getSessionUser(hash(token));
+  const tokenHash = hash(token);
+  const user = await store.getSessionUser(tokenHash);
+  if (!user) return null;
+  const now = Date.now();
+  const lastRenewed = sessionRenewals.get(tokenHash) || 0;
+  if (now - lastRenewed >= SESSION_TTL_MS / 2) {
+    await store.extendSession(tokenHash, now + SESSION_TTL_MS);
+    sessionRenewals.set(tokenHash, now);
+    res?.setHeader('Set-Cookie', cookie('sid', token, SESSION_TTL_SECONDS));
+    if (sessionRenewals.size > 10000) {
+      for (const [key, renewedAt] of sessionRenewals) {
+        if (now - renewedAt >= SESSION_TTL_MS) sessionRenewals.delete(key);
+        if (sessionRenewals.size <= 8000) break;
+      }
+    }
+  }
+  return user;
 }
 
 async function requireUser(req, res) {
-  const user = await getSessionUser(req);
+  const user = await getSessionUser(req, res);
   if (!user) {
     json(res, 401, { error: 'Sign in required' });
     return null;
@@ -270,9 +289,9 @@ const server = http.createServer(async (req, res) => {
       const user = await store.upsert(profile);
       if (req.cookies.sid) await store.deleteSession(hash(req.cookies.sid));
       const sid = random();
-      await store.createSession(hash(sid), user.id, Date.now() + 604800000);
+      await store.createSession(hash(sid), user.id, Date.now() + SESSION_TTL_MS);
       audit(user.id, 'google_login');
-      res.setHeader('Set-Cookie', [cookie('oauth_state', '', 0), cookie('sid', sid, 604800)]);
+      res.setHeader('Set-Cookie', [cookie('oauth_state', '', 0), cookie('sid', sid, SESSION_TTL_SECONDS)]);
       // Notify n8n automation (fire-and-forget, don't block login)
       notifyN8n('google_login', {
         user: {
@@ -634,7 +653,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/auth/logout') {
       if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
-      const user = await getSessionUser(req);
+      const user = await getSessionUser(req, res);
       if (req.cookies.sid) await store.deleteSession(hash(req.cookies.sid));
       if (user) audit(user.id, 'logout');
       res.setHeader('Set-Cookie', cookie('sid', '', 0));
@@ -643,7 +662,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && assets.has(url.pathname)) {
       if (url.pathname === '/dashboard') {
-        const user = await getSessionUser(req);
+        const user = await getSessionUser(req, res);
         if (!user) return redirect(res, '/');
         audit(user.id, 'dashboard_viewed');
       }

@@ -196,6 +196,24 @@ test('public comment lists return comments from every author with each author na
   }
 });
 
+test('persistent login sessions can be renewed in Supabase', async () => {
+  const originalFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (url, options) => {
+    request = { url: String(url), options };
+    return new Response(null, { status: 204 });
+  };
+  try {
+    const store = openSupabaseStore({ url: 'https://example.supabase.co', secretKey: 'test-only' });
+    await store.extendSession('hashed-token', 1900000000000);
+    assert.match(request.url, /\/rest\/v1\/sessions\?token_hash=eq.hashed-token$/);
+    assert.equal(request.options.method, 'PATCH');
+    assert.deepEqual(JSON.parse(request.options.body), { expires_at: 1900000000000 });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('public community account export is scoped to that account', async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];

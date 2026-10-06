@@ -96,6 +96,9 @@ export function openSupabaseStore({ url, secretKey }) {
     async deleteSession(tokenHash) {
       if (tokenHash) await write('sessions', 'DELETE', `token_hash=eq.${filter(tokenHash)}`, undefined, 'return=minimal');
     },
+    async extendSession(tokenHash, expiresAt) {
+      if (tokenHash) await write('sessions', 'PATCH', `token_hash=eq.${filter(tokenHash)}`, { expires_at: expiresAt }, 'return=minimal');
+    },
     async getSessionUser(tokenHash, now = Date.now()) {
       if (!tokenHash) return null;
       const session = await one('sessions', `select=user_id&token_hash=eq.${filter(tokenHash)}&expires_at=gt.${now}`);
