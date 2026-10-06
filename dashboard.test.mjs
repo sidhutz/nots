@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const dashboard = readFileSync(new URL('./public/dashboard.html', import.meta.url), 'utf8');
 const app = readFileSync(new URL('./public/app.js', import.meta.url), 'utf8');
+const server = readFileSync(new URL('./server.mjs', import.meta.url), 'utf8');
 
 test('dashboard menu starts hidden and targets available single-view sections', () => {
   assert.match(dashboard, /id="menuToggle"[^>]*aria-expanded="false"[^>]*aria-controls="dashboardMenu"/);
@@ -34,4 +35,5 @@ test('open comment panels refresh and poll for comments from other students', ()
   assert.match(app, /setInterval\(refreshOpenComments, 5000\)/);
   assert.match(app, /if \(viewName === 'feed'\) refreshOpenComments\(\)/);
   assert.match(app, /panel\.closest\('\[data-post-card\]'\)\?\.querySelector\('\[data-toggle-comments\]'\)/);
+  assert.match(server, /'Cache-Control': 'no-store, max-age=0'/);
 });

@@ -649,7 +649,10 @@ const server = http.createServer(async (req, res) => {
         audit(user.id, 'dashboard_viewed');
       }
       const [type, body] = assets.get(url.pathname);
-      res.writeHead(200, { 'Content-Type': type });
+      res.writeHead(200, {
+        'Content-Type': type,
+        'Cache-Control': 'no-store, max-age=0',
+      });
       return res.end(body);
     }
 
