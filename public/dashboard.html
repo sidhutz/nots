@@ -22,9 +22,23 @@
     </div>
   </header>
 
+  <nav class="dashboard-nav-wrap no-print" aria-label="Dashboard sections">
+    <div class="dashboard-nav">
+      <a class="dashboard-tab" href="#overview">Overview</a>
+      <a class="dashboard-tab" href="#findNotes">Search</a>
+      <a class="dashboard-tab dashboard-tab-primary" href="#uploadNotes"><span aria-hidden="true">＋</span> Upload file</a>
+      <a class="dashboard-tab" href="#writeNote">Write note</a>
+      <a class="dashboard-tab" href="#todoList">To-do list</a>
+      <a class="dashboard-tab" href="#writtenNotes">Written notes</a>
+      <a class="dashboard-tab" href="#uploadedFiles">Uploaded files</a>
+      <a class="dashboard-tab" href="#profileSettings">Profile</a>
+      <a class="dashboard-tab" href="#accountSettings">Account &amp; privacy</a>
+    </div>
+  </nav>
+
   <main class="dashboard notes-dashboard">
     <!-- Hero / Student Passport Section -->
-    <section class="profile student-summary" aria-label="Student summary">
+    <section class="profile student-summary" id="overview" aria-label="Student summary">
       <div class="profile-head">
         <div class="avatar-wrapper">
           <span class="avatar" id="avatar" aria-hidden="true">…</span>
@@ -59,7 +73,7 @@
     <!-- Global Alert Message -->
     <div class="alert" id="message" role="alert"></div>
 
-    <section class="card-section studio-card library-tools no-print" aria-label="Find notes">
+    <section class="card-section studio-card library-tools no-print" id="findNotes" aria-label="Find notes">
       <div class="section-header library-header">
         <div><h2>Find and organize notes</h2><p class="small">Search titles, file names, and written note content.</p></div>
       </div>
@@ -102,7 +116,7 @@
       </section>
 
       <!-- 2. Note Upload -->
-      <section class="card-section studio-card no-print">
+      <section class="card-section studio-card no-print" id="uploadNotes">
         <div class="section-header">
           <div class="header-tag-row">
             <span class="card-icon" aria-hidden="true">📤</span>
@@ -124,7 +138,7 @@
       </section>
 
       <!-- 3. Personal Note Writer -->
-      <section class="card-section studio-card no-print">
+      <section class="card-section studio-card no-print" id="writeNote">
         <div class="section-header">
           <div class="header-tag-row">
             <span class="card-icon" aria-hidden="true">📝</span>
@@ -150,7 +164,7 @@
       </section>
 
       <!-- 4. Student Todo List -->
-      <section class="card-section studio-card no-print">
+      <section class="card-section studio-card no-print" id="todoList">
         <div class="section-header">
           <div class="header-tag-row">
             <span class="card-icon" aria-hidden="true">📋</span>
@@ -178,7 +192,7 @@
     </div>
 
     <!-- Personal Written Notes Library -->
-    <section class="card-section note-library studio-card" aria-label="Your personal written notes">
+    <section class="card-section note-library studio-card" id="writtenNotes" aria-label="Your personal written notes">
       <div class="section-header library-header">
         <div>
           <h2>Your personal written notes</h2>
@@ -191,7 +205,7 @@
     </section>
 
     <!-- Uploaded File Notes Library -->
-    <section class="card-section note-library studio-card" aria-label="Your notes library">
+    <section class="card-section note-library studio-card" id="uploadedFiles" aria-label="Your notes library">
       <div class="section-header library-header">
         <div>
           <h2>Your uploaded file notes</h2>
@@ -203,7 +217,7 @@
       <div id="notesList" class="note-list"></div>
     </section>
 
-    <section class="card-section studio-card account-settings no-print" aria-label="Account and privacy settings">
+    <section class="card-section studio-card account-settings no-print" id="accountSettings" aria-label="Account and privacy settings">
       <div class="section-header"><h2>Account &amp; privacy controls</h2><p class="small">Manage your profile and take a copy of your data.</p></div>
       <div class="account-controls">
         <button class="secondary" id="exportData" type="button">Download my data</button>

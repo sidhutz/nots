@@ -1360,7 +1360,75 @@ footer {
 .danger-fill { background: var(--danger); border-color: var(--danger); }
 .printable-header { display: none; }
 
+.dashboard-nav-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border-block: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(14px);
+}
+.dashboard-nav {
+  display: flex;
+  gap: 8px;
+  max-width: 1224px;
+  margin: 0 auto;
+  padding: 10px 32px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.dashboard-tab {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 7px 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.dashboard-tab:hover,
+.dashboard-tab:focus-visible {
+  border-color: var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  outline: none;
+}
+.dashboard-tab[aria-current="location"] {
+  border-color: var(--blue-light);
+  background: var(--blue-light);
+  color: var(--blue);
+}
+.dashboard-tab-primary {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #fff;
+}
+.dashboard-tab-primary:hover,
+.dashboard-tab-primary:focus-visible {
+  border-color: var(--blue-hover);
+  background: var(--blue-hover);
+  color: #fff;
+}
+.notes-dashboard #overview,
+.notes-dashboard #findNotes,
+.notes-dashboard #uploadNotes,
+.notes-dashboard #writeNote,
+.notes-dashboard #todoList,
+.notes-dashboard #writtenNotes,
+.notes-dashboard #uploadedFiles,
+.notes-dashboard #profileSettings,
+.notes-dashboard #accountSettings { scroll-margin-top: 78px; }
+
 @media (max-width: 760px) {
+  .dashboard-nav { padding: 8px 16px; gap: 5px; }
+  .dashboard-tab { min-height: 38px; padding: 6px 12px; font-size: 12px; }
   .filter-row { grid-template-columns: 1fr 1fr; }
   .filter-search { grid-column: 1 / -1; }
   .todo-item { align-items: flex-start; flex-wrap: wrap; }

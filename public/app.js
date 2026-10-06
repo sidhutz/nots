@@ -319,6 +319,25 @@ if (profileForm && uploadForm && logout) {
     control?.addEventListener(control === noteSearch ? 'input' : 'change', applyNoteFilters);
   }
 
+  const dashboardNav = document.querySelector('.dashboard-nav');
+  if (dashboardNav && 'IntersectionObserver' in window) {
+    const dashboardLinks = [...dashboardNav.querySelectorAll('a[href^="#"]')];
+    const observedSections = dashboardLinks
+      .map(link => document.querySelector(link.getAttribute('href')))
+      .filter(Boolean);
+    const sectionObserver = new IntersectionObserver(entries => {
+      const current = entries
+        .filter(entry => entry.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (!current) return;
+      for (const link of dashboardLinks) {
+        if (link.hash === `#${current.target.id}`) link.setAttribute('aria-current', 'location');
+        else link.removeAttribute('aria-current');
+      }
+    }, { rootMargin: '-88px 0px -68% 0px', threshold: 0 });
+    observedSections.forEach(section => sectionObserver.observe(section));
+  }
+
   $('themeToggle')?.addEventListener('click', () => {
     const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = next;
