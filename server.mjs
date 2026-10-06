@@ -330,6 +330,90 @@ const server = http.createServer(async (req, res) => {
       return json(res, 201, { note: noteJson(note) });
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/feed') {
+      const user = await requireUser(req, res);
+      if (!user) return;
+      audit(user.id, 'public_feed_viewed');
+      return json(res, 200, { posts: await store.listPublicFeed(user.id) });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/posts') {
+      if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
+      const user = await requireUser(req, res);
+      if (!user) return;
+      if (!user.profile_completed) return json(res, 400, { error: 'Complete your student profile before sharing a public note.' });
+      const body = await readJson(req, 64 * 1024);
+      const title = sanitizeText(body.title, 120);
+      const content = String(body.content || '').replace(/\r\n/g, '\n').trim().slice(0, 10000);
+      if (!title) return json(res, 400, { error: 'Add a title to your public note.' });
+      if (!content) return json(res, 400, { error: 'Write something before publishing.' });
+      const post = await store.createPublicPost({ userId: user.id, title, content });
+      audit(user.id, 'public_post_created', { postId: post.id });
+      return json(res, 201, { post });
+    }
+
+    const postMatch = url.pathname.match(/^\/api\/posts\/(\d+)(?:\/(likes|comments|reposts))?$/);
+    if (postMatch) {
+      const postId = Number(postMatch[1]);
+      const action = postMatch[2] || 'post';
+      const user = await requireUser(req, res);
+      if (!user) return;
+      const post = await store.getPublicPostById(postId);
+      if (!post) return json(res, 404, { error: 'Public note not found.' });
+
+      if (action === 'post' && req.method === 'DELETE') {
+        if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
+        if (String(post.author_id) !== String(user.id)) return json(res, 403, { error: 'You can only delete your own public notes.' });
+        await store.deletePublicPost(postId, user.id);
+        audit(user.id, 'public_post_deleted', { postId });
+        return json(res, 200, { ok: true });
+      }
+
+      if (action === 'likes') {
+        if (req.method === 'GET') return json(res, 200, { likes: await store.listPostLikes(postId) });
+        if (req.method === 'POST' || req.method === 'DELETE') {
+          if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
+          if (req.method === 'POST') {
+            await store.likePublicPost(postId, user.id);
+            audit(user.id, 'public_post_liked', { postId });
+          } else {
+            await store.unlikePublicPost(postId, user.id);
+            audit(user.id, 'public_post_unliked', { postId });
+          }
+          return json(res, 200, { ok: true });
+        }
+      }
+
+      if (action === 'comments') {
+        if (req.method === 'GET') return json(res, 200, { comments: await store.listPostComments(postId) });
+        if (req.method === 'POST') {
+          if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
+          if (!user.profile_completed) return json(res, 400, { error: 'Complete your student profile before commenting.' });
+          const body = await readJson(req, 8 * 1024);
+          const content = String(body.content || '').trim().slice(0, 1000);
+          if (!content) return json(res, 400, { error: 'Write a comment first.' });
+          const comment = await store.createPostComment({ postId, userId: user.id, content });
+          audit(user.id, 'public_post_commented', { postId, commentId: comment.id });
+          return json(res, 201, { comment });
+        }
+      }
+
+      if (action === 'reposts') {
+        if (req.method === 'GET') return json(res, 200, { reposts: await store.listPostReposts(postId) });
+        if (req.method === 'POST' || req.method === 'DELETE') {
+          if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
+          if (req.method === 'POST') {
+            await store.repostPublicPost(postId, user.id);
+            audit(user.id, 'public_post_reposted', { postId });
+          } else {
+            await store.unrepostPublicPost(postId, user.id);
+            audit(user.id, 'public_post_unreposted', { postId });
+          }
+          return json(res, 200, { ok: true });
+        }
+      }
+    }
+
     const noteMatch = url.pathname.match(/^\/api\/notes\/(\d+)(?:\/(download|preview))?$/);
     if (noteMatch) {
       const noteId = Number(noteMatch[1]);
@@ -479,6 +563,7 @@ const server = http.createServer(async (req, res) => {
         writtenNotes: await store.listTextNotesByUser(user.id),
         tasks: await store.listTodosByUser(user.id),
         activity: await store.listActivityByUser(user.id),
+        publicCommunity: await store.listPublicDataByUser(user.id),
       });
     }
 

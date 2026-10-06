@@ -16,29 +16,43 @@
     </a>
     <div class="header-actions">
       <span class="status"><span class="pulse-dot" aria-hidden="true"></span> Signed in with Google</span>
+      <button class="secondary menu-toggle" id="menuToggle" type="button" aria-expanded="false" aria-controls="dashboardMenu">☰ Sections</button>
       <button class="secondary" id="themeToggle" type="button" aria-pressed="false">Dark mode</button>
       <button class="secondary" id="printNotes" type="button">Export / print</button>
       <a href="/privacy" class="header-link">Privacy</a>
     </div>
   </header>
 
-  <nav class="dashboard-nav-wrap no-print" aria-label="Dashboard sections">
-    <div class="dashboard-nav">
-      <a class="dashboard-tab" href="#overview">Overview</a>
-      <a class="dashboard-tab" href="#findNotes">Search</a>
-      <a class="dashboard-tab dashboard-tab-primary" href="#uploadNotes"><span aria-hidden="true">＋</span> Upload file</a>
-      <a class="dashboard-tab" href="#writeNote">Write note</a>
-      <a class="dashboard-tab" href="#todoList">To-do list</a>
-      <a class="dashboard-tab" href="#writtenNotes">Written notes</a>
-      <a class="dashboard-tab" href="#uploadedFiles">Uploaded files</a>
-      <a class="dashboard-tab" href="#profileSettings">Profile</a>
-      <a class="dashboard-tab" href="#accountSettings">Account &amp; privacy</a>
-    </div>
+  <nav id="dashboardMenu" class="dashboard-menu no-print" aria-label="Dashboard sections" hidden>
+    <p class="dashboard-menu-label">YOUR STUDY SPACE</p>
+    <button class="dashboard-menu-item" type="button" data-view-target="feed">⌂ <span>Study feed</span></button>
+    <button class="dashboard-menu-item" type="button" data-view-target="notes">⌕ <span>Search &amp; my notes</span></button>
+    <button class="dashboard-menu-item dashboard-menu-primary" type="button" data-view-target="upload">＋ <span>Upload a file</span></button>
+    <button class="dashboard-menu-item" type="button" data-view-target="write">✎ <span>Write a personal note</span></button>
+    <button class="dashboard-menu-item" type="button" data-view-target="tasks">☷ <span>To-do list</span></button>
+    <button class="dashboard-menu-item" type="button" data-view-target="profile">♙ <span>Profile</span></button>
+    <button class="dashboard-menu-item" type="button" data-view-target="account">⚙ <span>Account &amp; privacy</span></button>
   </nav>
 
   <main class="dashboard notes-dashboard">
+    <h1 class="sr-only" id="currentViewTitle">Study feed</h1>
+    <section id="communityFeed" class="dashboard-view social-view" data-dashboard-view="feed" data-view-active="true" aria-label="Student study feed">
+      <div class="feed-heading">
+        <div><span class="eyebrow-tag">STUDENT COMMUNITY</span><h1>Study feed</h1><p class="small">Share useful written notes with other students.</p></div>
+        <button class="secondary" id="refreshFeed" type="button" aria-label="Refresh feed">↻ Refresh</button>
+      </div>
+      <form id="publicPostForm" class="studio-card post-composer">
+        <label>Note title<input id="publicPostTitle" maxlength="120" type="text" required placeholder="e.g. Biology: cell division summary"></label>
+        <label>Your public note<textarea id="publicPostContent" maxlength="10000" rows="5" required placeholder="Share a study summary, helpful explanation, or revision notes…"></textarea></label>
+        <div class="composer-footer"><p class="small">Public post: signed-in students can read, like, comment, and repost it.</p><button class="primary" id="publishPost" type="submit">Share note</button></div>
+      </form>
+      <p id="feedStatus" class="small feed-status" role="status" aria-live="polite"></p>
+      <div id="feedEmpty" class="empty-state">No public notes yet. Share the first study note with your classmates.</div>
+      <div id="feedList" class="social-feed"></div>
+    </section>
+
     <!-- Hero / Student Passport Section -->
-    <section class="profile student-summary" id="overview" aria-label="Student summary">
+    <section class="profile student-summary dashboard-view" id="overview" data-dashboard-view="profile" data-view-active="false" aria-label="Student summary">
       <div class="profile-head">
         <div class="avatar-wrapper">
           <span class="avatar" id="avatar" aria-hidden="true">…</span>
@@ -73,7 +87,7 @@
     <!-- Global Alert Message -->
     <div class="alert" id="message" role="alert"></div>
 
-    <section class="card-section studio-card library-tools no-print" id="findNotes" aria-label="Find notes">
+    <section class="card-section studio-card library-tools no-print dashboard-view" id="findNotes" data-dashboard-view="notes" data-view-active="false" aria-label="Find notes">
       <div class="section-header library-header">
         <div><h2>Find and organize notes</h2><p class="small">Search titles, file names, and written note content.</p></div>
       </div>
@@ -86,9 +100,9 @@
     </section>
 
     <!-- 4-Card Workspace Grid -->
-    <div class="dashboard-grid">
+    <div class="dashboard-grid" id="workspaceGrid" hidden>
       <!-- 1. Profile Editing -->
-      <section class="card-section studio-card no-print" id="profileSettings">
+      <section class="card-section studio-card no-print dashboard-view" id="profileSettings" data-dashboard-view="profile" data-view-active="false">
         <div class="section-header">
           <div class="header-tag-row">
             <span class="card-icon" aria-hidden="true">👤</span>
@@ -116,7 +130,7 @@
       </section>
 
       <!-- 2. Note Upload -->
-      <section class="card-section studio-card no-print" id="uploadNotes">
+      <section class="card-section studio-card no-print dashboard-view" id="uploadNotes" data-dashboard-view="upload" data-view-active="false">
         <div class="section-header">
           <div class="header-tag-row">
             <span class="card-icon" aria-hidden="true">📤</span>
@@ -138,7 +152,7 @@
       </section>
 
       <!-- 3. Personal Note Writer -->
-      <section class="card-section studio-card no-print" id="writeNote">
+      <section class="card-section studio-card no-print dashboard-view" id="writeNote" data-dashboard-view="write" data-view-active="false">
         <div class="section-header">
           <div class="header-tag-row">
             <span class="card-icon" aria-hidden="true">📝</span>
@@ -164,7 +178,7 @@
       </section>
 
       <!-- 4. Student Todo List -->
-      <section class="card-section studio-card no-print" id="todoList">
+      <section class="card-section studio-card no-print dashboard-view" id="todoList" data-dashboard-view="tasks" data-view-active="false">
         <div class="section-header">
           <div class="header-tag-row">
             <span class="card-icon" aria-hidden="true">📋</span>
@@ -192,7 +206,7 @@
     </div>
 
     <!-- Personal Written Notes Library -->
-    <section class="card-section note-library studio-card" id="writtenNotes" aria-label="Your personal written notes">
+    <section class="card-section note-library studio-card dashboard-view" id="writtenNotes" data-dashboard-view="notes" data-view-active="false" aria-label="Your personal written notes">
       <div class="section-header library-header">
         <div>
           <h2>Your personal written notes</h2>
@@ -205,7 +219,7 @@
     </section>
 
     <!-- Uploaded File Notes Library -->
-    <section class="card-section note-library studio-card" id="uploadedFiles" aria-label="Your notes library">
+    <section class="card-section note-library studio-card dashboard-view" id="uploadedFiles" data-dashboard-view="notes" data-view-active="false" aria-label="Your notes library">
       <div class="section-header library-header">
         <div>
           <h2>Your uploaded file notes</h2>
@@ -217,7 +231,7 @@
       <div id="notesList" class="note-list"></div>
     </section>
 
-    <section class="card-section studio-card account-settings no-print" id="accountSettings" aria-label="Account and privacy settings">
+    <section class="card-section studio-card account-settings no-print dashboard-view" id="accountSettings" data-dashboard-view="account" data-view-active="false" aria-label="Account and privacy settings">
       <div class="section-header"><h2>Account &amp; privacy controls</h2><p class="small">Manage your profile and take a copy of your data.</p></div>
       <div class="account-controls">
         <button class="secondary" id="exportData" type="button">Download my data</button>
@@ -227,7 +241,7 @@
     </section>
 
     <!-- Session & Sign-out Actions -->
-    <div class="dashboard-actions">
+    <div class="dashboard-actions dashboard-view" data-dashboard-view="account" data-view-active="false">
       <button class="secondary" id="logout">Sign out</button>
       <p class="small">Signing out ends this session. Your student profile, written notes, and uploaded files remain safely stored in your private account workspace.</p>
     </div>

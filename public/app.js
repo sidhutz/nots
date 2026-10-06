@@ -74,6 +74,58 @@ if (profileForm && uploadForm && logout) {
   const todoText = $('todoText');
   const todosList = $('todosList');
   const todosEmpty = $('todosEmpty');
+  const publicPostForm = $('publicPostForm');
+  const publicPostTitle = $('publicPostTitle');
+  const publicPostContent = $('publicPostContent');
+  const publishPostButton = $('publishPost');
+  const feedList = $('feedList');
+  const feedEmpty = $('feedEmpty');
+  const feedStatus = $('feedStatus');
+  const feedPostsById = new Map();
+  const menuToggle = $('menuToggle');
+  const dashboardMenu = $('dashboardMenu');
+  const dashboardGrid = $('workspaceGrid');
+  const dashboardViews = [...document.querySelectorAll('[data-dashboard-view]')];
+
+  function showDashboardView(viewName) {
+    const hasView = dashboardViews.some(view => view.dataset.dashboardView === viewName);
+    if (!hasView) return;
+    for (const view of dashboardViews) view.dataset.viewActive = String(view.dataset.dashboardView === viewName);
+    dashboardGrid.hidden = ![...dashboardGrid.querySelectorAll(':scope > [data-dashboard-view]')]
+      .some(view => view.dataset.dashboardView === viewName);
+    for (const button of dashboardMenu.querySelectorAll('[data-view-target]')) {
+      if (button.dataset.viewTarget === viewName) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    }
+    const activeButton = dashboardMenu.querySelector(`[data-view-target="${viewName}"]`);
+    $('currentViewTitle').textContent = activeButton?.textContent.trim() || 'Study feed';
+    dashboardMenu.hidden = true;
+    menuToggle.setAttribute('aria-expanded', 'false');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  menuToggle.addEventListener('click', () => {
+    dashboardMenu.hidden = !dashboardMenu.hidden;
+    menuToggle.setAttribute('aria-expanded', String(!dashboardMenu.hidden));
+  });
+  dashboardMenu.addEventListener('click', event => {
+    const button = event.target.closest('[data-view-target]');
+    if (button) showDashboardView(button.dataset.viewTarget);
+  });
+  document.addEventListener('click', event => {
+    if (!dashboardMenu.hidden && !dashboardMenu.contains(event.target) && !menuToggle.contains(event.target)) {
+      dashboardMenu.hidden = true;
+      menuToggle.setAttribute('aria-expanded', 'false');
+    }
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !dashboardMenu.hidden) {
+      dashboardMenu.hidden = true;
+      menuToggle.setAttribute('aria-expanded', 'false');
+      menuToggle.focus();
+    }
+  });
+  showDashboardView('feed');
 
   function renderUser(user) {
     currentUser = user;
@@ -112,6 +164,13 @@ if (profileForm && uploadForm && logout) {
       todoHint.textContent = user.profile_completed
         ? 'Keep track of your study tasks and homework.'
         : 'Save the student profile first to create todo items.';
+    }
+
+    if (publicPostForm) {
+      publicPostTitle.disabled = !user.profile_completed;
+      publicPostContent.disabled = !user.profile_completed;
+      publishPostButton.disabled = !user.profile_completed;
+      if (!user.profile_completed) feedStatus.textContent = 'Complete your student profile from the menu before sharing a public note.';
     }
   }
 
@@ -256,6 +315,206 @@ if (profileForm && uploadForm && logout) {
       .replace(/'/g, '&#039;');
   }
 
+  function socialAvatar(person) {
+    const name = person?.name || 'Student';
+    return `<span class="social-avatar">${person?.picture ? `<img src="${escapeHtml(person.picture)}" alt="">` : escapeHtml(name.slice(0, 1).toUpperCase())}</span>`;
+  }
+
+  function renderPeople(people) {
+    if (!people.length) return '<p class="small">Nobody yet.</p>';
+    return `<ul class="social-name-list">${people.map(item => {
+      const person = item.user || item;
+      return `<li>${socialAvatar(person)}<span>${escapeHtml(person.name || 'Student')}</span></li>`;
+    }).join('')}</ul>`;
+  }
+
+  function renderComments(comments) {
+    if (!comments.length) return '<p class="small">No comments yet. Start the conversation.</p>';
+    return comments.map(comment => `<article class="social-comment">${socialAvatar(comment.author)}<div><strong>${escapeHtml(comment.author?.name || 'Student')}</strong><p>${escapeHtml(comment.content)}</p></div></article>`).join('');
+  }
+
+  function renderFeed(posts) {
+    feedPostsById.clear();
+    feedEmpty.hidden = posts.length > 0;
+    feedList.innerHTML = posts.map(post => {
+      feedPostsById.set(String(post.id), post);
+      const isOwner = currentUser && String(currentUser.id) === String(post.authorId);
+      return `<article class="social-post" data-post-card="${post.id}">
+        <div class="social-post-head">${socialAvatar(post.author)}<div class="social-post-author"><strong>${escapeHtml(post.author?.name || 'Student')}</strong><time datetime="${escapeHtml(post.createdAt)}">${formatDate(post.createdAt)}</time></div>
+          ${isOwner ? '<button class="social-post-menu" type="button" data-delete-post aria-label="Delete your public note" title="Delete post">⋯</button>' : ''}
+        </div>
+        <h2>${escapeHtml(post.title)}</h2><p class="social-post-content">${escapeHtml(post.content)}</p>
+        <div class="social-post-actions">
+          <button class="secondary" type="button" data-like-post aria-pressed="${post.likedByMe}">${post.likedByMe ? '♥ Liked' : '♡ Like'}</button>
+          <button class="ghost" type="button" data-show-likers>${post.likeCount} ${post.likeCount === 1 ? 'like' : 'likes'}</button>
+          <button class="ghost" type="button" data-toggle-comments>${post.commentCount} ${post.commentCount === 1 ? 'comment' : 'comments'}</button>
+          <button class="secondary" type="button" data-repost aria-pressed="${post.repostedByMe}">${post.repostedByMe ? '↻ Reposted' : '↻ Repost'}</button>
+          <button class="ghost" type="button" data-show-reposters>${post.repostCount} reposts</button>
+        </div>
+        <div class="social-detail" data-likers-panel hidden></div>
+        <div class="social-detail" data-reposters-panel hidden></div>
+        <div class="social-detail social-comments-panel" data-comments-panel hidden>
+          <div class="social-comments" data-comment-list></div>
+          <form class="social-comment-form" data-comment-form>
+            <textarea name="content" rows="1" maxlength="1000" required aria-label="Write a comment" placeholder="Write a comment…"></textarea>
+            <button class="primary" type="submit">Comment</button>
+          </form>
+        </div>
+      </article>`;
+    }).join('');
+  }
+
+  async function loadFeed() {
+    feedStatus.textContent = 'Loading public study notes…';
+    try {
+      const response = await fetch('/api/feed');
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error || 'Could not load the public feed.');
+      renderFeed(data.posts || []);
+      feedStatus.textContent = '';
+    } catch (error) {
+      feedStatus.textContent = `${error.message || 'Could not load the public feed.'} If this is the first setup, run the public-community Supabase migration.`;
+      feedEmpty.hidden = true;
+      feedList.replaceChildren();
+    }
+  }
+
+  async function loadSocialPeople(postId, panel, endpoint, emptyText) {
+    panel.hidden = false;
+    panel.textContent = 'Loading…';
+    try {
+      const response = await fetch(`/api/posts/${postId}/${endpoint}`);
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error || `Could not load ${endpoint}.`);
+      const people = data[endpoint] || [];
+      panel.innerHTML = people.length ? renderPeople(people) : `<p class="small">${emptyText}</p>`;
+    } catch (error) {
+      panel.textContent = error.message || `Could not load ${endpoint}.`;
+    }
+  }
+
+  async function loadPostComments(postId, panel) {
+    const list = panel.querySelector('[data-comment-list]');
+    list.textContent = 'Loading comments…';
+    try {
+      const response = await fetch(`/api/posts/${postId}/comments`);
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error || 'Could not load comments.');
+      list.innerHTML = renderComments(data.comments || []);
+      panel.dataset.loaded = 'true';
+    } catch (error) {
+      list.textContent = error.message || 'Could not load comments.';
+    }
+  }
+
+  feedList.addEventListener('click', async event => {
+    const card = event.target.closest('[data-post-card]');
+    if (!card) return;
+    const postId = card.dataset.postCard;
+    const post = feedPostsById.get(String(postId));
+    if (!post) return;
+    const likerButton = event.target.closest('[data-show-likers]');
+    if (likerButton) {
+      const panel = card.querySelector('[data-likers-panel]');
+      if (panel.hidden) await loadSocialPeople(postId, panel, 'likes', 'No likes yet.');
+      else panel.hidden = true;
+      return;
+    }
+    const repostersButton = event.target.closest('[data-show-reposters]');
+    if (repostersButton) {
+      const panel = card.querySelector('[data-reposters-panel]');
+      if (panel.hidden) await loadSocialPeople(postId, panel, 'reposts', 'Nobody has reposted this note yet.');
+      else panel.hidden = true;
+      return;
+    }
+    const commentsButton = event.target.closest('[data-toggle-comments]');
+    if (commentsButton) {
+      const panel = card.querySelector('[data-comments-panel]');
+      panel.hidden = !panel.hidden;
+      if (!panel.hidden && panel.dataset.loaded !== 'true') await loadPostComments(postId, panel);
+      return;
+    }
+    const likeButton = event.target.closest('[data-like-post]');
+    if (likeButton) {
+      likeButton.disabled = true;
+      try {
+        const response = await fetch(`/api/posts/${postId}/likes`, { method: post.likedByMe ? 'DELETE' : 'POST' });
+        const data = await response.json();
+        if (!response.ok) throw Error(data.error || 'Could not update like.');
+        post.likedByMe = !post.likedByMe;
+        post.likeCount = Math.max(0, post.likeCount + (post.likedByMe ? 1 : -1));
+        renderFeed([...feedPostsById.values()]);
+      } catch (error) { feedStatus.textContent = error.message || 'Could not update like.'; likeButton.disabled = false; }
+      return;
+    }
+    const repostButton = event.target.closest('[data-repost]');
+    if (repostButton) {
+      repostButton.disabled = true;
+      try {
+        const response = await fetch(`/api/posts/${postId}/reposts`, { method: post.repostedByMe ? 'DELETE' : 'POST' });
+        const data = await response.json();
+        if (!response.ok) throw Error(data.error || 'Could not update repost.');
+        post.repostedByMe = !post.repostedByMe;
+        post.repostCount = Math.max(0, post.repostCount + (post.repostedByMe ? 1 : -1));
+        renderFeed([...feedPostsById.values()]);
+      } catch (error) { feedStatus.textContent = error.message || 'Could not update repost.'; repostButton.disabled = false; }
+      return;
+    }
+    const deleteButton = event.target.closest('[data-delete-post]');
+    if (deleteButton) {
+      if (!window.confirm('Delete this public note? Its likes, comments and reposts will also be removed.')) return;
+      deleteButton.disabled = true;
+      try {
+        const response = await fetch(`/api/posts/${postId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!response.ok) throw Error(data.error || 'Could not delete the post.');
+        renderFeed([...feedPostsById.values()].filter(item => String(item.id) !== String(postId)));
+      } catch (error) { feedStatus.textContent = error.message || 'Could not delete the post.'; deleteButton.disabled = false; }
+    }
+  });
+
+  feedList.addEventListener('submit', async event => {
+    const form = event.target.closest('[data-comment-form]');
+    if (!form) return;
+    event.preventDefault();
+    const card = form.closest('[data-post-card]');
+    const post = feedPostsById.get(String(card.dataset.postCard));
+    const textarea = form.elements.content;
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      const response = await fetch(`/api/posts/${card.dataset.postCard}/comments`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: textarea.value }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error || 'Could not add the comment.');
+      textarea.value = '';
+      post.commentCount += 1;
+      card.querySelector('[data-toggle-comments]').textContent = `${post.commentCount} ${post.commentCount === 1 ? 'comment' : 'comments'}`;
+      await loadPostComments(card.dataset.postCard, card.querySelector('[data-comments-panel]'));
+    } catch (error) { feedStatus.textContent = error.message || 'Could not add the comment.'; }
+    finally { button.disabled = false; }
+  });
+
+  $('refreshFeed')?.addEventListener('click', loadFeed);
+  publicPostForm?.addEventListener('submit', async event => {
+    event.preventDefault();
+    publishPostButton.disabled = true;
+    feedStatus.textContent = 'Sharing your note…';
+    try {
+      const response = await fetch('/api/posts', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: publicPostTitle.value, content: publicPostContent.value }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error || 'Could not share your note.');
+      publicPostForm.reset();
+      feedStatus.textContent = 'Your public study note has been shared.';
+      await loadFeed();
+    } catch (error) { feedStatus.textContent = error.message || 'Could not share your note.'; }
+    finally { publishPostButton.disabled = !currentUser?.profile_completed; }
+  });
+
   function setAutosaveLabel(text, tone = '') {
     if (!autosaveStatus) return;
     autosaveStatus.textContent = text;
@@ -317,25 +576,6 @@ if (profileForm && uploadForm && logout) {
 
   for (const control of [noteSearch, noteTypeFilter, noteDateFilter, noteSort]) {
     control?.addEventListener(control === noteSearch ? 'input' : 'change', applyNoteFilters);
-  }
-
-  const dashboardNav = document.querySelector('.dashboard-nav');
-  if (dashboardNav && 'IntersectionObserver' in window) {
-    const dashboardLinks = [...dashboardNav.querySelectorAll('a[href^="#"]')];
-    const observedSections = dashboardLinks
-      .map(link => document.querySelector(link.getAttribute('href')))
-      .filter(Boolean);
-    const sectionObserver = new IntersectionObserver(entries => {
-      const current = entries
-        .filter(entry => entry.isIntersecting)
-        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-      if (!current) return;
-      for (const link of dashboardLinks) {
-        if (link.hash === `#${current.target.id}`) link.setAttribute('aria-current', 'location');
-        else link.removeAttribute('aria-current');
-      }
-    }, { rootMargin: '-88px 0px -68% 0px', threshold: 0 });
-    observedSections.forEach(section => sectionObserver.observe(section));
   }
 
   $('themeToggle')?.addEventListener('click', () => {
@@ -677,6 +917,7 @@ if (profileForm && uploadForm && logout) {
       await loadNotes();
       await loadTextNotes();
       await loadTodos();
+      await loadFeed();
       if (reminderTimer) clearInterval(reminderTimer);
       reminderTimer = setInterval(checkDueReminders, 30000);
       checkDueReminders();

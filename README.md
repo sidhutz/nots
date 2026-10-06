@@ -8,6 +8,8 @@ Google sign-in wali responsive student-notes website. Student Google se login ka
 - Student profile form: full name, contact email, role Student
 - Private note uploads up to 10 MB per file
 - Each signed-in student can list, download and delete only their own notes
+- Public student study feed with written-note posts, likes and visible liker lists, comments and reposts
+- Menu-driven dashboard views for feed, notes, upload, writing, tasks, profile and account settings
 - Supabase Postgres for accounts, profiles, sessions, notes, todos, and activity history
 - Private Supabase Storage bucket for uploaded note files
 - No external npm dependency
@@ -108,6 +110,13 @@ If the existing Supabase project was created before task due dates were added,
 run `supabase-migrations/20261002_todo_due_at.sql` once in the Supabase SQL
 Editor. For a new Supabase setup, `supabase-schema.sql` already includes this
 column. After applying it, redeploy the app so the dashboard feature is live.
+
+For public study posts, likes, comments and reposts on an existing project, run
+`supabase-migrations/20261006_public_community.sql` in the Supabase SQL Editor
+before using the community feed. For a new project, these tables are included
+in `supabase-schema.sql`. Public posts are visible to signed-in students;
+personal text notes and uploaded files remain private. The server checks the
+signed-in account for all feed and interaction requests.
 
 ## Useful commands
 

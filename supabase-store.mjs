@@ -22,6 +22,7 @@ export function openSupabaseStore({ url, secretKey }) {
   }
 
   const filter = value => encodeURIComponent(String(value));
+  const inFilter = values => `in.(${values.map(value => `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`).join(',')})`;
   const rows = (table, query = '') => call(`/rest/v1/${table}?${query}`);
   const write = (table, method, query, value, prefer = 'return=representation') =>
     call(`/rest/v1/${table}?${query}`, { method, body: value, prefer });
@@ -41,6 +42,18 @@ export function openSupabaseStore({ url, secretKey }) {
     sizeBytes: Number(row.size_bytes),
     createdAt: row.created_at,
   });
+  const publicPerson = row => row && ({
+    id: row.id,
+    name: row.full_name || row.name || 'Student',
+    picture: row.picture || null,
+  });
+
+  async function usersByIds(ids) {
+    const uniqueIds = [...new Set(ids.filter(Boolean).map(String))];
+    if (!uniqueIds.length) return new Map();
+    const users = await rows('users', `select=id,full_name,name,picture&id=${filter(inFilter(uniqueIds))}`);
+    return new Map(users.map(user => [String(user.id), publicPerson(user)]));
+  }
 
   return {
     async upsert(profile) {
@@ -135,6 +148,104 @@ export function openSupabaseStore({ url, secretKey }) {
     },
     async deleteTextNoteByIdForUser(noteId, userId) {
       await write('text_notes', 'DELETE', `id=eq.${filter(noteId)}&user_id=eq.${filter(userId)}`, undefined, 'return=minimal');
+    },
+    async createPublicPost({ userId, title, content }) {
+      const result = await write('public_posts', 'POST', '', { author_id: userId, title, content });
+      const post = result[0];
+      const author = await this.getUserById(userId);
+      return {
+        id: post.id, authorId: post.author_id, author: publicPerson(author), title: post.title,
+        content: post.content, createdAt: post.created_at, likeCount: 0, commentCount: 0,
+        repostCount: 0, likedByMe: false, repostedByMe: false,
+      };
+    },
+    async getPublicPostById(postId) {
+      return one('public_posts', `select=*&id=eq.${filter(postId)}`);
+    },
+    async listPublicFeed(viewerId, limit = 50) {
+      const posts = await rows('public_posts', `select=*&order=created_at.desc&limit=${Math.min(Math.max(Number(limit) || 50, 1), 100)}`);
+      if (!posts.length) return [];
+      const postIds = posts.map(post => String(post.id));
+      const [authors, likes, reposts] = await Promise.all([
+        usersByIds(posts.map(post => post.author_id)),
+        rows('public_post_likes', `select=post_id&user_id=eq.${filter(viewerId)}&post_id=${filter(inFilter(postIds))}`),
+        rows('public_post_reposts', `select=post_id&user_id=eq.${filter(viewerId)}&post_id=${filter(inFilter(postIds))}`),
+      ]);
+      const likedPostIds = new Set(likes.map(row => String(row.post_id)));
+      const repostedPostIds = new Set(reposts.map(row => String(row.post_id)));
+      return posts.map(post => ({
+        id: post.id,
+        authorId: post.author_id,
+        author: authors.get(String(post.author_id)) || { id: post.author_id, name: 'Student', picture: null },
+        title: post.title,
+        content: post.content,
+        createdAt: post.created_at,
+        likeCount: Number(post.like_count) || 0,
+        commentCount: Number(post.comment_count) || 0,
+        repostCount: Number(post.repost_count) || 0,
+        likedByMe: likedPostIds.has(String(post.id)),
+        repostedByMe: repostedPostIds.has(String(post.id)),
+      }));
+    },
+    async listPostLikes(postId) {
+      const likes = await rows('public_post_likes', `select=user_id,created_at&post_id=eq.${filter(postId)}&order=created_at.asc&limit=500`);
+      const users = await usersByIds(likes.map(like => like.user_id));
+      return likes.map(like => ({
+        user: users.get(String(like.user_id)) || { id: like.user_id, name: 'Student', picture: null },
+        createdAt: like.created_at,
+      }));
+    },
+    async likePublicPost(postId, userId) {
+      await write('public_post_likes', 'POST', 'on_conflict=post_id,user_id', { post_id: postId, user_id: userId }, 'resolution=ignore-duplicates,return=minimal');
+    },
+    async unlikePublicPost(postId, userId) {
+      await write('public_post_likes', 'DELETE', `post_id=eq.${filter(postId)}&user_id=eq.${filter(userId)}`, undefined, 'return=minimal');
+    },
+    async listPostComments(postId) {
+      const comments = await rows('public_post_comments', `select=id,post_id,author_id,content,created_at&post_id=eq.${filter(postId)}&order=created_at.asc&limit=200`);
+      const users = await usersByIds(comments.map(comment => comment.author_id));
+      return comments.map(comment => ({
+        id: comment.id, postId: comment.post_id, content: comment.content,
+        author: users.get(String(comment.author_id)) || { id: comment.author_id, name: 'Student', picture: null },
+        createdAt: comment.created_at,
+      }));
+    },
+    async createPostComment({ postId, userId, content }) {
+      const result = await write('public_post_comments', 'POST', '', { post_id: postId, author_id: userId, content });
+      const comment = result[0];
+      const author = await this.getUserById(userId);
+      return {
+        id: comment.id, postId: comment.post_id, content: comment.content,
+        author: publicPerson(author), createdAt: comment.created_at,
+      };
+    },
+    async listPostReposts(postId) {
+      const reposts = await rows('public_post_reposts', `select=user_id,created_at&post_id=eq.${filter(postId)}&order=created_at.asc&limit=500`);
+      const users = await usersByIds(reposts.map(repost => repost.user_id));
+      return reposts.map(repost => ({
+        user: users.get(String(repost.user_id)) || { id: repost.user_id, name: 'Student', picture: null },
+        createdAt: repost.created_at,
+      }));
+    },
+    async repostPublicPost(postId, userId) {
+      await write('public_post_reposts', 'POST', 'on_conflict=post_id,user_id', { post_id: postId, user_id: userId }, 'resolution=ignore-duplicates,return=minimal');
+    },
+    async unrepostPublicPost(postId, userId) {
+      await write('public_post_reposts', 'DELETE', `post_id=eq.${filter(postId)}&user_id=eq.${filter(userId)}`, undefined, 'return=minimal');
+    },
+    async deletePublicPost(postId, userId) {
+      const deleted = await write('public_posts', 'DELETE', `id=eq.${filter(postId)}&author_id=eq.${filter(userId)}`, undefined, 'return=representation');
+      return Boolean(deleted?.length);
+    },
+    async listPublicDataByUser(userId) {
+      const owner = filter(userId);
+      const [posts, likes, comments, reposts] = await Promise.all([
+        rows('public_posts', `select=id,title,content,like_count,comment_count,repost_count,created_at&author_id=eq.${owner}&order=created_at.desc`),
+        rows('public_post_likes', `select=post_id,created_at&user_id=eq.${owner}&order=created_at.desc`),
+        rows('public_post_comments', `select=id,post_id,content,created_at&author_id=eq.${owner}&order=created_at.desc`),
+        rows('public_post_reposts', `select=post_id,created_at&user_id=eq.${owner}&order=created_at.desc`),
+      ]);
+      return { posts, likes, comments, reposts };
     },
     async createTodo({ userId, text, dueAt = null }) {
       const result = await write('todos', 'POST', '', { user_id: userId, text, ...(dueAt ? { due_at: dueAt } : {}) });

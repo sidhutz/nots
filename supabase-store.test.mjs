@@ -65,3 +65,67 @@ test('Supabase account deletion removes private files and account rows in order'
     globalThis.fetch = originalFetch;
   }
 });
+
+test('public feed maps author, cached counts, and viewer interaction state', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async url => {
+    const requestUrl = String(url);
+    if (requestUrl.includes('/rest/v1/public_posts?')) return jsonResponse([{
+      id: 31, author_id: 'author-1', title: 'Algebra', content: 'A useful identity',
+      like_count: 4, comment_count: 2, repost_count: 1, created_at: '2026-10-06T08:00:00Z',
+    }]);
+    if (requestUrl.includes('/rest/v1/public_post_likes?')) return jsonResponse([{ post_id: 31 }]);
+    if (requestUrl.includes('/rest/v1/public_post_reposts?')) return jsonResponse([]);
+    if (requestUrl.includes('/rest/v1/users?')) return jsonResponse([{ id: 'author-1', full_name: 'A Student', name: 'Google Name', picture: null }]);
+    throw Error(`Unexpected request ${requestUrl}`);
+  };
+  try {
+    const store = openSupabaseStore({ url: 'https://example.supabase.co', secretKey: 'test-only' });
+    const [post] = await store.listPublicFeed('viewer-1');
+    assert.equal(post.author.name, 'A Student');
+    assert.equal(post.likeCount, 4);
+    assert.equal(post.commentCount, 2);
+    assert.equal(post.repostCount, 1);
+    assert.equal(post.likedByMe, true);
+    assert.equal(post.repostedByMe, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('public like lists include the names of users who liked a note', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async url => {
+    const requestUrl = String(url);
+    if (requestUrl.includes('/rest/v1/public_post_likes?')) return jsonResponse([{ user_id: 'liker-1', created_at: '2026-10-06T08:05:00Z' }]);
+    if (requestUrl.includes('/rest/v1/users?')) return jsonResponse([{ id: 'liker-1', full_name: 'Taylor', name: 'Taylor', picture: 'https://lh3.googleusercontent.com/avatar' }]);
+    throw Error(`Unexpected request ${requestUrl}`);
+  };
+  try {
+    const store = openSupabaseStore({ url: 'https://example.supabase.co', secretKey: 'test-only' });
+    const likes = await store.listPostLikes(31);
+    assert.equal(likes.length, 1);
+    assert.equal(likes[0].user.name, 'Taylor');
+    assert.equal(likes[0].user.picture, 'https://lh3.googleusercontent.com/avatar');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('public community account export is scoped to that account', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async url => {
+    calls.push(String(url));
+    return jsonResponse([]);
+  };
+  try {
+    const store = openSupabaseStore({ url: 'https://example.supabase.co', secretKey: 'test-only' });
+    const exported = await store.listPublicDataByUser('student-1');
+    assert.deepEqual(Object.keys(exported), ['posts', 'likes', 'comments', 'reposts']);
+    assert.equal(calls.length, 4);
+    assert.ok(calls.every(url => url.includes('author_id=eq.student-1') || url.includes('user_id=eq.student-1')));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

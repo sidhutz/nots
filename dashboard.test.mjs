@@ -4,15 +4,16 @@ import { readFileSync } from 'node:fs';
 
 const dashboard = readFileSync(new URL('./public/dashboard.html', import.meta.url), 'utf8');
 
-test('dashboard navigation links point to unique sections', () => {
-  const nav = dashboard.match(/<nav class="dashboard-nav-wrap[\s\S]*?<\/nav>/)?.[0];
-  assert.ok(nav, 'dashboard navigation should exist');
-  assert.match(nav, /aria-label="Dashboard sections"/);
-  const targets = [...nav.matchAll(/href="#([^"]+)"/g)].map(match => match[1]);
-  assert.ok(targets.length >= 8, 'navigation should include all major dashboard sections');
-  assert.equal(new Set(targets).size, targets.length, 'navigation targets should be unique');
+test('dashboard menu starts hidden and targets available single-view sections', () => {
+  assert.match(dashboard, /id="menuToggle"[^>]*aria-expanded="false"[^>]*aria-controls="dashboardMenu"/);
+  const menu = dashboard.match(/<nav id="dashboardMenu"[\s\S]*?<\/nav>/)?.[0];
+  assert.ok(menu, 'dashboard section menu should exist');
+  assert.match(menu, /aria-label="Dashboard sections"[^>]*hidden/);
+  const targets = [...menu.matchAll(/data-view-target="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(targets, ['feed', 'notes', 'upload', 'write', 'tasks', 'profile', 'account']);
   for (const target of targets) {
-    assert.equal((dashboard.match(new RegExp(`id="${target}"`, 'g')) || []).length, 1, `#${target} should resolve to exactly one section`);
+    assert.match(dashboard, new RegExp(`data-dashboard-view="${target}"`), `${target} should have a dashboard view`);
   }
-  assert.match(nav, /href="#uploadNotes">[\s\S]*?Upload file/);
+  assert.match(menu, /data-view-target="upload">[\s\S]*?Upload a file/);
+  assert.match(dashboard, /id="communityFeed"[^>]*data-view-active="true"/);
 });
