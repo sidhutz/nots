@@ -360,12 +360,13 @@ if (profileForm && uploadForm && logout) {
         </div>
         <div class="social-detail" data-likers-panel hidden></div>
         <div class="social-detail" data-reposters-panel hidden></div>
-        <div class="social-detail social-comments-panel" data-comments-panel hidden>
-          <div class="social-comments" data-comment-list></div>
-          <form class="social-comment-form" data-comment-form>
-            <textarea name="content" rows="1" maxlength="1000" required aria-label="Write a comment" placeholder="Write a comment…"></textarea>
-            <button class="primary" type="submit">Comment</button>
-          </form>
+      <div class="social-detail social-comments-panel" data-comments-panel hidden>
+        <div class="social-comments" data-comment-list></div>
+        <form class="social-comment-form" data-comment-form>
+          <textarea name="content" rows="1" maxlength="1000" required aria-label="Write a comment" placeholder="Write a comment…"></textarea>
+          <button class="primary" type="submit">Comment</button>
+          <p class="small" data-comment-status aria-live="polite"></p>
+        </form>
         </div>
       </article>`;
     }).join('');
@@ -510,6 +511,8 @@ if (profileForm && uploadForm && logout) {
     const post = feedPostsById.get(String(card.dataset.postCard));
     const textarea = form.elements.content;
     const button = form.querySelector('button[type="submit"]');
+    const status = form.querySelector('[data-comment-status]');
+    if (status) status.textContent = '';
     button.disabled = true;
     try {
       const response = await fetch(`/api/posts/${card.dataset.postCard}/comments`, {
@@ -523,7 +526,11 @@ if (profileForm && uploadForm && logout) {
       const list = card.querySelector('[data-comment-list]');
       if (data.comment) list.insertAdjacentHTML('beforeend', renderComments([data.comment]));
       await loadPostComments(card.dataset.postCard, card.querySelector('[data-comments-panel]'));
-    } catch (error) { feedStatus.textContent = error.message || 'Could not add the comment.'; }
+    } catch (error) {
+      const errorMessage = error.message || 'Could not add the comment.';
+      if (status) status.textContent = errorMessage;
+      else feedStatus.textContent = errorMessage;
+    }
     finally { button.disabled = false; }
   });
 

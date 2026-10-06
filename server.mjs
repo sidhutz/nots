@@ -443,7 +443,6 @@ const server = http.createServer(async (req, res) => {
         if (req.method === 'GET') return json(res, 200, { comments: await store.listPostComments(postId) });
         if (req.method === 'POST') {
           if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
-          if (!user.profile_completed) return json(res, 400, { error: 'Complete your student profile before commenting.' });
           const body = await readJson(req, 8 * 1024);
           const content = String(body.content || '').trim().slice(0, 1000);
           if (!content) return json(res, 400, { error: 'Write a comment first.' });

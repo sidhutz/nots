@@ -36,4 +36,6 @@ test('open comment panels refresh and poll for comments from other students', ()
   assert.match(app, /if \(viewName === 'feed'\) refreshOpenComments\(\)/);
   assert.match(app, /panel\.closest\('\[data-post-card\]'\)\?\.querySelector\('\[data-toggle-comments\]'\)/);
   assert.match(server, /'Cache-Control': 'no-store, max-age=0'/);
+  assert.doesNotMatch(server, /if \(action === 'comments'\)[\s\S]{0,400}profile_completed/);
+  assert.match(app, /data-comment-status aria-live="polite"/);
 });
