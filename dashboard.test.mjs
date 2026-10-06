@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const dashboard = readFileSync(new URL('./public/dashboard.html', import.meta.url), 'utf8');
+const app = readFileSync(new URL('./public/app.js', import.meta.url), 'utf8');
 
 test('dashboard menu starts hidden and targets available single-view sections', () => {
   assert.match(dashboard, /id="menuToggle"[^>]*aria-expanded="false"[^>]*aria-controls="dashboardMenu"/);
@@ -25,4 +26,10 @@ test('public attachment composer and social feed have narrow phone layouts', () 
   assert.match(css, /@media \(max-width: 760px\)\s*\{[^}]*header \{ flex-direction: column/s);
   assert.match(css, /\.header-actions \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(css, /\.post-attachment-image img \{ display: block; width: 100%/);
+});
+
+test('open comment panels refresh and poll for comments from other students', () => {
+  assert.match(app, /if \(!panel\.hidden\) await loadPostComments\(postId, panel\)/);
+  assert.match(app, /setInterval\(refreshOpenComments, 12000\)/);
+  assert.match(app, /panel\.closest\('\[data-post-card\]'\)\?\.querySelector\('\[data-toggle-comments\]'\)/);
 });

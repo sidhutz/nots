@@ -166,6 +166,34 @@ test('public like lists include the names of users who liked a note', async () =
   }
 });
 
+test('public comment lists return comments from every author with each author name', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async url => {
+    const requestUrl = String(url);
+    calls.push(requestUrl);
+    if (requestUrl.includes('/rest/v1/public_post_comments?')) return jsonResponse([
+      { id: 1, post_id: 31, author_id: 'owner-1', content: 'My comment', created_at: '2026-10-06T08:01:00Z' },
+      { id: 2, post_id: 31, author_id: 'student-2', content: 'Another student comment', created_at: '2026-10-06T08:02:00Z' },
+    ]);
+    if (requestUrl.includes('/rest/v1/users?')) return jsonResponse([
+      { id: 'owner-1', full_name: 'Post Owner', name: 'Owner', picture: null },
+      { id: 'student-2', full_name: 'Other Student', name: 'Other', picture: null },
+    ]);
+    throw Error(`Unexpected request ${requestUrl}`);
+  };
+  try {
+    const store = openSupabaseStore({ url: 'https://example.supabase.co', secretKey: 'test-only' });
+    const comments = await store.listPostComments(31);
+    assert.equal(comments.length, 2);
+    assert.deepEqual(comments.map(comment => comment.author.name), ['Post Owner', 'Other Student']);
+    assert.ok(calls.some(url => url.includes('post_id=eq.31')));
+    assert.ok(!calls.some(url => url.includes('author_id=eq.')));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('public community account export is scoped to that account', async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];

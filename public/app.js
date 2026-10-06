@@ -399,19 +399,41 @@ if (profileForm && uploadForm && logout) {
     }
   }
 
-  async function loadPostComments(postId, panel) {
+  async function loadPostComments(postId, panel, { silent = false } = {}) {
+    if (panel.dataset.loading === 'true') return;
     const list = panel.querySelector('[data-comment-list]');
-    list.textContent = 'Loading comments…';
+    panel.dataset.loading = 'true';
+    if (!silent) list.textContent = 'Loading comments…';
     try {
       const response = await fetch(`/api/posts/${postId}/comments`);
       const data = await response.json();
       if (!response.ok) throw Error(data.error || 'Could not load comments.');
-      list.innerHTML = renderComments(data.comments || []);
+      const comments = data.comments || [];
+      list.innerHTML = renderComments(comments);
       panel.dataset.loaded = 'true';
+      const post = feedPostsById.get(String(postId));
+      if (post) {
+        post.commentCount = comments.length;
+        const button = panel.closest('[data-post-card]')?.querySelector('[data-toggle-comments]');
+        if (button) button.textContent = `${post.commentCount} ${post.commentCount === 1 ? 'comment' : 'comments'}`;
+      }
     } catch (error) {
-      list.textContent = error.message || 'Could not load comments.';
+      if (!silent || panel.dataset.loaded !== 'true') list.textContent = error.message || 'Could not load comments.';
+    } finally {
+      delete panel.dataset.loading;
     }
   }
+
+  function refreshOpenComments() {
+    if (document.visibilityState !== 'visible' || $('communityFeed').dataset.viewActive !== 'true') return;
+    for (const panel of feedList.querySelectorAll('[data-comments-panel]:not([hidden])')) {
+      const card = panel.closest('[data-post-card]');
+      if (card) void loadPostComments(card.dataset.postCard, panel, { silent: true });
+    }
+  }
+  setInterval(refreshOpenComments, 12000);
+  document.addEventListener('visibilitychange', refreshOpenComments);
+  window.addEventListener('focus', refreshOpenComments);
 
   feedList.addEventListener('click', async event => {
     const card = event.target.closest('[data-post-card]');
@@ -437,7 +459,7 @@ if (profileForm && uploadForm && logout) {
     if (commentsButton) {
       const panel = card.querySelector('[data-comments-panel]');
       panel.hidden = !panel.hidden;
-      if (!panel.hidden && panel.dataset.loaded !== 'true') await loadPostComments(postId, panel);
+      if (!panel.hidden) await loadPostComments(postId, panel);
       return;
     }
     const likeButton = event.target.closest('[data-like-post]');
