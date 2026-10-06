@@ -51,16 +51,18 @@ test('Supabase account deletion removes private files and account rows in order'
   globalThis.fetch = async (url, init) => {
     calls.push({ url: String(url), init });
     if (String(url).includes('/rest/v1/notes?')) return jsonResponse([{ stored_name: 'owner/file one.pdf' }]);
+    if (String(url).includes('/rest/v1/public_posts?')) return jsonResponse([]);
     return new Response(null, { status: 204 });
   };
   try {
     const store = openSupabaseStore({ url: 'https://example.supabase.co', secretKey: 'test-only' });
     await store.deleteAccount('student-1');
-    assert.equal(calls.length, 4);
+    assert.equal(calls.length, 5);
     assert.equal(calls[1].init.method, 'DELETE');
     assert.match(calls[1].url, /\/storage\/v1\/object\/student-notes\/owner\/file%20one\.pdf$/);
-    assert.match(calls[2].url, /\/rest\/v1\/activity_log\?/);
-    assert.match(calls[3].url, /\/rest\/v1\/users\?/);
+    assert.match(calls[2].url, /\/rest\/v1\/public_posts\?/);
+    assert.match(calls[3].url, /\/rest\/v1\/activity_log\?/);
+    assert.match(calls[4].url, /\/rest\/v1\/users\?/);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -76,6 +78,9 @@ test('public feed maps author, cached counts, and viewer interaction state', asy
     }]);
     if (requestUrl.includes('/rest/v1/public_post_likes?')) return jsonResponse([{ post_id: 31 }]);
     if (requestUrl.includes('/rest/v1/public_post_reposts?')) return jsonResponse([]);
+    if (requestUrl.includes('/rest/v1/public_post_attachments?')) return jsonResponse([{
+      post_id: 31, original_name: 'diagram.png', content_type: 'image/png', size_bytes: 1200,
+    }]);
     if (requestUrl.includes('/rest/v1/users?')) return jsonResponse([{ id: 'author-1', full_name: 'A Student', name: 'Google Name', picture: null }]);
     throw Error(`Unexpected request ${requestUrl}`);
   };
@@ -88,6 +93,55 @@ test('public feed maps author, cached counts, and viewer interaction state', asy
     assert.equal(post.repostCount, 1);
     assert.equal(post.likedByMe, true);
     assert.equal(post.repostedByMe, false);
+    assert.equal(post.attachment.filename, 'diagram.png');
+    assert.equal(post.attachment.isImage, true);
+    assert.equal(post.attachment.url, '/api/posts/31/attachment');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('public post creation uploads an optional attachment to private storage and records metadata', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), init });
+    if (String(url).includes('/rest/v1/public_posts?') && init.method === 'POST') return jsonResponse([{
+      id: 31, author_id: 'author-1', title: 'Cell diagram', content: 'Labelled cells', created_at: '2026-10-06T08:00:00Z',
+    }], 201);
+    if (String(url).includes('/storage/v1/object/student-notes/')) return jsonResponse({ Key: 'stored' });
+    if (String(url).includes('/rest/v1/public_post_attachments?')) return jsonResponse([{
+      post_id: 31, original_name: 'cell.png', content_type: 'image/png', size_bytes: 4,
+    }], 201);
+    if (String(url).includes('/rest/v1/users?')) return jsonResponse([{
+      id: 'author-1', full_name: 'A Student', name: 'A Student', picture: null,
+    }]);
+    throw Error(`Unexpected request ${url}`);
+  };
+  try {
+    const store = openSupabaseStore({ url: 'https://example.supabase.co', secretKey: 'test-only' });
+    const post = await store.createPublicPost({
+      userId: 'author-1', title: 'Cell diagram', content: 'Labelled cells',
+      attachment: { filename: 'cell.png', contentType: 'image/png', storageName: 'private/public-posts/cell.png', data: Buffer.from('png!') },
+    });
+    assert.equal(post.attachment.filename, 'cell.png');
+    assert.equal(post.attachment.isImage, true);
+    const upload = calls.find(call => call.url.includes('/storage/v1/object/'));
+    assert.equal(upload.init.method, 'POST');
+    assert.equal(upload.init.body.toString(), 'png!');
+    const metadata = calls.find(call => call.url.includes('/rest/v1/public_post_attachments?'));
+    assert.equal(JSON.parse(metadata.init.body).storage_name, 'private/public-posts/cell.png');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('missing community schema returns a clear migration error', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse({ code: 'PGRST205', message: 'Could not find table' }, 404);
+  try {
+    const store = openSupabaseStore({ url: 'https://example.supabase.co', secretKey: 'test-only' });
+    await assert.rejects(store.listPublicFeed('viewer-1'), /Apply the public-community Supabase migration/);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -122,8 +176,8 @@ test('public community account export is scoped to that account', async () => {
   try {
     const store = openSupabaseStore({ url: 'https://example.supabase.co', secretKey: 'test-only' });
     const exported = await store.listPublicDataByUser('student-1');
-    assert.deepEqual(Object.keys(exported), ['posts', 'likes', 'comments', 'reposts']);
-    assert.equal(calls.length, 4);
+    assert.deepEqual(Object.keys(exported), ['posts', 'likes', 'comments', 'reposts', 'attachments']);
+    assert.equal(calls.length, 5);
     assert.ok(calls.every(url => url.includes('author_id=eq.student-1') || url.includes('user_id=eq.student-1')));
   } finally {
     globalThis.fetch = originalFetch;

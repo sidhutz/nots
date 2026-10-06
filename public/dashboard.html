@@ -43,7 +43,9 @@
       </div>
       <form id="publicPostForm" class="studio-card post-composer">
         <label>Note title<input id="publicPostTitle" maxlength="120" type="text" required placeholder="e.g. Biology: cell division summary"></label>
-        <label>Your public note<textarea id="publicPostContent" maxlength="10000" rows="5" required placeholder="Share a study summary, helpful explanation, or revision notes…"></textarea></label>
+        <label>Note or caption<textarea id="publicPostContent" maxlength="10000" rows="5" placeholder="Share a study summary, helpful explanation, or caption…"></textarea></label>
+        <label class="attachment-picker">Add a photo or study file<input id="publicPostAttachment" name="attachment" type="file" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.doc,.docx,.ppt,.pptx,.txt" aria-describedby="publicPostAttachmentHint"></label>
+        <p class="small attachment-hint" id="publicPostAttachmentHint">Optional · image, PDF, Word, PowerPoint, or text file · up to 10 MB</p>
         <div class="composer-footer"><p class="small">Public post: signed-in students can read, like, comment, and repost it.</p><button class="primary" id="publishPost" type="submit">Share note</button></div>
       </form>
       <p id="feedStatus" class="small feed-status" role="status" aria-live="polite"></p>

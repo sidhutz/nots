@@ -16,4 +16,13 @@ test('dashboard menu starts hidden and targets available single-view sections', 
   }
   assert.match(menu, /data-view-target="upload">[\s\S]*?Upload a file/);
   assert.match(dashboard, /id="communityFeed"[^>]*data-view-active="true"/);
+  assert.match(dashboard, /id="publicPostAttachment"[^>]*type="file"/);
+  assert.match(dashboard, /aria-describedby="publicPostAttachmentHint"/);
+});
+
+test('public attachment composer and social feed have narrow phone layouts', () => {
+  const css = readFileSync(new URL('./public/style.css', import.meta.url), 'utf8');
+  assert.match(css, /@media \(max-width: 760px\)\s*\{[^}]*header \{ flex-direction: column/s);
+  assert.match(css, /\.header-actions \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.post-attachment-image img \{ display: block; width: 100%/);
 });

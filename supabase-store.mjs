@@ -15,7 +15,13 @@ export function openSupabaseStore({ url, secretKey }) {
       ...(body !== undefined ? { body: contentType ? body : JSON.stringify(body) } : {}),
       signal: AbortSignal.timeout(20000),
     });
-    if (!response.ok) throw Error(`Supabase request failed (${response.status})`);
+    if (!response.ok) {
+      if (response.status === 404) {
+        const error = await response.json().catch(() => null);
+        if (error?.code === 'PGRST205') throw Error('Community database setup is incomplete. Apply the public-community Supabase migration.');
+      }
+      throw Error(`Supabase request failed (${response.status})`);
+    }
     if (response.status === 204) return null;
     const type = response.headers.get('content-type') || '';
     return type.includes('application/json') ? response.json() : Buffer.from(await response.arrayBuffer());
@@ -149,15 +155,47 @@ export function openSupabaseStore({ url, secretKey }) {
     async deleteTextNoteByIdForUser(noteId, userId) {
       await write('text_notes', 'DELETE', `id=eq.${filter(noteId)}&user_id=eq.${filter(userId)}`, undefined, 'return=minimal');
     },
-    async createPublicPost({ userId, title, content }) {
+    async createPublicPost({ userId, title, content, attachment = null }) {
       const result = await write('public_posts', 'POST', '', { author_id: userId, title, content });
       const post = result[0];
+      let attachmentRow = null;
+      if (attachment) {
+        try {
+          await this.uploadNote(attachment.storageName, attachment.data, attachment.contentType);
+          const saved = await write('public_post_attachments', 'POST', '', {
+            post_id: post.id,
+            original_name: attachment.filename,
+            storage_name: attachment.storageName,
+            content_type: attachment.contentType,
+            size_bytes: attachment.data.length,
+          });
+          attachmentRow = saved[0];
+        } catch (error) {
+          await this.deleteNoteFile(attachment.storageName).catch(() => {});
+          await write('public_posts', 'DELETE', `id=eq.${filter(post.id)}`, undefined, 'return=minimal').catch(() => {});
+          throw error;
+        }
+      }
       const author = await this.getUserById(userId);
       return {
         id: post.id, authorId: post.author_id, author: publicPerson(author), title: post.title,
         content: post.content, createdAt: post.created_at, likeCount: 0, commentCount: 0,
         repostCount: 0, likedByMe: false, repostedByMe: false,
+        attachment: attachmentRow ? {
+          filename: attachmentRow.original_name,
+          contentType: attachmentRow.content_type,
+          sizeBytes: Number(attachmentRow.size_bytes),
+          isImage: String(attachmentRow.content_type).startsWith('image/'),
+          url: `/api/posts/${post.id}/attachment`,
+        } : null,
       };
+    },
+    async getPostAttachment(postId) {
+      return one('public_post_attachments', `select=*&post_id=eq.${filter(postId)}`);
+    },
+    async listPostAttachments(postIds) {
+      if (!postIds.length) return [];
+      return rows('public_post_attachments', `select=*&post_id=${filter(inFilter(postIds))}`);
     },
     async getPublicPostById(postId) {
       return one('public_posts', `select=*&id=eq.${filter(postId)}`);
@@ -166,13 +204,15 @@ export function openSupabaseStore({ url, secretKey }) {
       const posts = await rows('public_posts', `select=*&order=created_at.desc&limit=${Math.min(Math.max(Number(limit) || 50, 1), 100)}`);
       if (!posts.length) return [];
       const postIds = posts.map(post => String(post.id));
-      const [authors, likes, reposts] = await Promise.all([
+      const [authors, likes, reposts, attachments] = await Promise.all([
         usersByIds(posts.map(post => post.author_id)),
         rows('public_post_likes', `select=post_id&user_id=eq.${filter(viewerId)}&post_id=${filter(inFilter(postIds))}`),
         rows('public_post_reposts', `select=post_id&user_id=eq.${filter(viewerId)}&post_id=${filter(inFilter(postIds))}`),
+        this.listPostAttachments(postIds),
       ]);
       const likedPostIds = new Set(likes.map(row => String(row.post_id)));
       const repostedPostIds = new Set(reposts.map(row => String(row.post_id)));
+      const attachmentByPost = new Map(attachments.map(row => [String(row.post_id), row]));
       return posts.map(post => ({
         id: post.id,
         authorId: post.author_id,
@@ -185,6 +225,13 @@ export function openSupabaseStore({ url, secretKey }) {
         repostCount: Number(post.repost_count) || 0,
         likedByMe: likedPostIds.has(String(post.id)),
         repostedByMe: repostedPostIds.has(String(post.id)),
+        attachment: attachmentByPost.has(String(post.id)) ? {
+          filename: attachmentByPost.get(String(post.id)).original_name,
+          contentType: attachmentByPost.get(String(post.id)).content_type,
+          sizeBytes: Number(attachmentByPost.get(String(post.id)).size_bytes),
+          isImage: String(attachmentByPost.get(String(post.id)).content_type).startsWith('image/'),
+          url: `/api/posts/${post.id}/attachment`,
+        } : null,
       }));
     },
     async listPostLikes(postId) {
@@ -239,13 +286,17 @@ export function openSupabaseStore({ url, secretKey }) {
     },
     async listPublicDataByUser(userId) {
       const owner = filter(userId);
-      const [posts, likes, comments, reposts] = await Promise.all([
+      const [posts, likes, comments, reposts, attachments] = await Promise.all([
         rows('public_posts', `select=id,title,content,like_count,comment_count,repost_count,created_at&author_id=eq.${owner}&order=created_at.desc`),
         rows('public_post_likes', `select=post_id,created_at&user_id=eq.${owner}&order=created_at.desc`),
         rows('public_post_comments', `select=id,post_id,content,created_at&author_id=eq.${owner}&order=created_at.desc`),
         rows('public_post_reposts', `select=post_id,created_at&user_id=eq.${owner}&order=created_at.desc`),
+        (async () => {
+          const authoredPosts = await rows('public_posts', `select=id&author_id=eq.${owner}`);
+          return this.listPostAttachments(authoredPosts.map(post => String(post.id)));
+        })(),
       ]);
-      return { posts, likes, comments, reposts };
+      return { posts, likes, comments, reposts, attachments };
     },
     async createTodo({ userId, text, dueAt = null }) {
       const result = await write('todos', 'POST', '', { user_id: userId, text, ...(dueAt ? { due_at: dueAt } : {}) });
@@ -275,6 +326,9 @@ export function openSupabaseStore({ url, secretKey }) {
     async deleteAccount(userId) {
       const files = await rows('notes', `select=stored_name&user_id=eq.${filter(userId)}`);
       for (const file of files) await this.deleteNoteFile(file.stored_name);
+      const posts = await rows('public_posts', `select=id&author_id=eq.${filter(userId)}`);
+      const attachments = await this.listPostAttachments(posts.map(post => String(post.id)));
+      for (const attachment of attachments) await this.deleteNoteFile(attachment.storage_name);
       await write('activity_log', 'DELETE', `user_id=eq.${filter(userId)}`, undefined, 'return=minimal');
       await write('users', 'DELETE', `id=eq.${filter(userId)}`, undefined, 'return=minimal');
     },

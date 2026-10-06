@@ -77,6 +77,7 @@ if (profileForm && uploadForm && logout) {
   const publicPostForm = $('publicPostForm');
   const publicPostTitle = $('publicPostTitle');
   const publicPostContent = $('publicPostContent');
+  const publicPostAttachment = $('publicPostAttachment');
   const publishPostButton = $('publishPost');
   const feedList = $('feedList');
   const feedEmpty = $('feedEmpty');
@@ -169,6 +170,7 @@ if (profileForm && uploadForm && logout) {
     if (publicPostForm) {
       publicPostTitle.disabled = !user.profile_completed;
       publicPostContent.disabled = !user.profile_completed;
+      publicPostAttachment.disabled = !user.profile_completed;
       publishPostButton.disabled = !user.profile_completed;
       if (!user.profile_completed) feedStatus.textContent = 'Complete your student profile from the menu before sharing a public note.';
     }
@@ -339,11 +341,15 @@ if (profileForm && uploadForm && logout) {
     feedList.innerHTML = posts.map(post => {
       feedPostsById.set(String(post.id), post);
       const isOwner = currentUser && String(currentUser.id) === String(post.authorId);
+      const attachment = post.attachment ? (post.attachment.isImage
+        ? `<a class="post-attachment-image" href="${escapeHtml(post.attachment.url)}" target="_blank" rel="noopener"><img src="${escapeHtml(post.attachment.url)}" alt="Attachment: ${escapeHtml(post.attachment.filename)}" loading="lazy"></a>`
+        : `<a class="post-attachment-file" href="${escapeHtml(post.attachment.url)}" download="${escapeHtml(post.attachment.filename)}">📎 ${escapeHtml(post.attachment.filename)} <span>Download</span></a>`)
+        : '';
       return `<article class="social-post" data-post-card="${post.id}">
         <div class="social-post-head">${socialAvatar(post.author)}<div class="social-post-author"><strong>${escapeHtml(post.author?.name || 'Student')}</strong><time datetime="${escapeHtml(post.createdAt)}">${formatDate(post.createdAt)}</time></div>
           ${isOwner ? '<button class="social-post-menu" type="button" data-delete-post aria-label="Delete your public note" title="Delete post">⋯</button>' : ''}
         </div>
-        <h2>${escapeHtml(post.title)}</h2><p class="social-post-content">${escapeHtml(post.content)}</p>
+        <h2>${escapeHtml(post.title)}</h2><p class="social-post-content">${escapeHtml(post.content)}</p>${attachment}
         <div class="social-post-actions">
           <button class="secondary" type="button" data-like-post aria-pressed="${post.likedByMe}">${post.likedByMe ? '♥ Liked' : '♡ Like'}</button>
           <button class="ghost" type="button" data-show-likers>${post.likeCount} ${post.likeCount === 1 ? 'like' : 'likes'}</button>
@@ -502,13 +508,15 @@ if (profileForm && uploadForm && logout) {
     publishPostButton.disabled = true;
     feedStatus.textContent = 'Sharing your note…';
     try {
-      const response = await fetch('/api/posts', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: publicPostTitle.value, content: publicPostContent.value }),
-      });
+      const body = new FormData();
+      body.set('title', publicPostTitle.value);
+      body.set('content', publicPostContent.value);
+      if (publicPostAttachment.files[0]) body.set('attachment', publicPostAttachment.files[0]);
+      const response = await fetch('/api/posts', { method: 'POST', body });
       const data = await response.json();
       if (!response.ok) throw Error(data.error || 'Could not share your note.');
       publicPostForm.reset();
+      publicPostAttachment.value = '';
       feedStatus.textContent = 'Your public study note has been shared.';
       await loadFeed();
     } catch (error) { feedStatus.textContent = error.message || 'Could not share your note.'; }

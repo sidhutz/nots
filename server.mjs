@@ -52,6 +52,17 @@ function sanitizeFilename(value) {
   return safe || 'note.bin';
 }
 
+function publicAttachmentType(filename) {
+  const types = {
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp', '.gif': 'image/gif', '.pdf': 'application/pdf',
+    '.doc': 'application/msword', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.ppt': 'application/vnd.ms-powerpoint', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    '.txt': 'text/plain',
+  };
+  return types[extname(filename).toLowerCase()] || null;
+}
+
 function sameOrigin(req) {
   return !req.headers.origin || req.headers.origin === base;
 }
@@ -342,14 +353,53 @@ const server = http.createServer(async (req, res) => {
       const user = await requireUser(req, res);
       if (!user) return;
       if (!user.profile_completed) return json(res, 400, { error: 'Complete your student profile before sharing a public note.' });
-      const body = await readJson(req, 64 * 1024);
-      const title = sanitizeText(body.title, 120);
-      const content = String(body.content || '').replace(/\r\n/g, '\n').trim().slice(0, 10000);
+      const isMultipart = (req.headers['content-type'] || '').toLowerCase().includes('multipart/form-data');
+      const body = isMultipart
+        ? await parseMultipart(req, 10 * 1024 * 1024 + 128 * 1024)
+        : { fields: await readJson(req, 64 * 1024), files: {} };
+      const title = sanitizeText(body.fields.title, 120);
+      const content = String(body.fields.content || '').replace(/\r\n/g, '\n').trim().slice(0, 10000);
+      const uploaded = body.files.attachment;
       if (!title) return json(res, 400, { error: 'Add a title to your public note.' });
-      if (!content) return json(res, 400, { error: 'Write something before publishing.' });
-      const post = await store.createPublicPost({ userId: user.id, title, content });
+      if (!content && !uploaded?.data?.length) return json(res, 400, { error: 'Write a note or add a photo/file before sharing.' });
+      let attachment = null;
+      if (uploaded?.data?.length) {
+        const filename = sanitizeFilename(uploaded.filename).slice(0, 180) || 'attachment';
+        const contentType = publicAttachmentType(filename);
+        if (!contentType) return json(res, 415, { error: 'Choose an image, PDF, Word, PowerPoint, or text file.' });
+        if (uploaded.data.length > 10 * 1024 * 1024) return json(res, 413, { error: 'Keep public attachments under 10 MB.' });
+        attachment = {
+          filename,
+          contentType,
+          data: uploaded.data,
+          storageName: `${hash(user.id).slice(0, 32)}/public-posts/${Date.now()}-${randomHex(6)}${extname(filename).toLowerCase()}`,
+        };
+      }
+      const post = await store.createPublicPost({ userId: user.id, title, content, attachment });
       audit(user.id, 'public_post_created', { postId: post.id });
       return json(res, 201, { post });
+    }
+
+    const attachmentMatch = url.pathname.match(/^\/api\/posts\/(\d+)\/attachment$/);
+    if (req.method === 'GET' && attachmentMatch) {
+      const user = await requireUser(req, res);
+      if (!user) return;
+      const postId = Number(attachmentMatch[1]);
+      if (!await store.getPublicPostById(postId)) return json(res, 404, { error: 'Public note not found.' });
+      const attachment = await store.getPostAttachment(postId);
+      if (!attachment) return json(res, 404, { error: 'Attachment not found.' });
+      const file = await store.downloadNote(attachment.storage_name);
+      const isImage = String(attachment.content_type).startsWith('image/');
+      audit(user.id, 'public_post_attachment_viewed', { postId });
+      res.writeHead(200, {
+        'Content-Type': attachment.content_type,
+        'Content-Length': String(file.length),
+        'Content-Disposition': `${isImage ? 'inline' : 'attachment'}; filename="${sanitizeFilename(attachment.original_name).replace(/"/g, '')}"`,
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; sandbox",
+      });
+      return res.end(file);
     }
 
     const postMatch = url.pathname.match(/^\/api\/posts\/(\d+)(?:\/(likes|comments|reposts))?$/);
@@ -364,6 +414,8 @@ const server = http.createServer(async (req, res) => {
       if (action === 'post' && req.method === 'DELETE') {
         if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
         if (String(post.author_id) !== String(user.id)) return json(res, 403, { error: 'You can only delete your own public notes.' });
+        const attachment = await store.getPostAttachment(postId);
+        if (attachment) await store.deleteNoteFile(attachment.storage_name);
         await store.deletePublicPost(postId, user.id);
         audit(user.id, 'public_post_deleted', { postId });
         return json(res, 200, { ok: true });
@@ -602,6 +654,8 @@ const server = http.createServer(async (req, res) => {
   } catch (error) {
     const known = {
       'Body too large': ['The uploaded file is too large. Keep it under 10 MB.', 413],
+      'Unsupported public attachment': ['Choose an image, PDF, Word, PowerPoint, or text file.', 415],
+      'Community database setup is incomplete. Apply the public-community Supabase migration.': ['Posting is not ready yet: apply supabase-migrations/20261006_public_community.sql in the Supabase SQL Editor, then retry.', 503],
       'Missing form boundary': ['Upload the file using the provided form.', 400],
       'Invalid multipart headers': ['The upload format was invalid.', 400],
       'Missing multipart field name': ['The upload payload was invalid.', 400],

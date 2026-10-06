@@ -16,6 +16,19 @@ alter table public.public_posts add column if not exists like_count bigint not n
 alter table public.public_posts add column if not exists comment_count bigint not null default 0;
 alter table public.public_posts add column if not exists repost_count bigint not null default 0;
 
+create table if not exists public.public_post_attachments (
+  post_id bigint primary key references public.public_posts(id) on delete cascade,
+  original_name text not null check (char_length(original_name) <= 180),
+  storage_name text not null unique,
+  content_type text not null check (content_type in (
+    'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'application/pdf',
+    'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'text/plain'
+  )),
+  size_bytes bigint not null check (size_bytes > 0 and size_bytes <= 10485760),
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.public_post_likes (
   post_id bigint not null references public.public_posts(id) on delete cascade,
   user_id text not null references public.users(id) on delete cascade,
@@ -49,6 +62,7 @@ update public.public_posts p set
   repost_count = (select count(*) from public.public_post_reposts r where r.post_id = p.id);
 
 alter table public.public_posts enable row level security;
+alter table public.public_post_attachments enable row level security;
 alter table public.public_post_likes enable row level security;
 alter table public.public_post_comments enable row level security;
 alter table public.public_post_reposts enable row level security;
