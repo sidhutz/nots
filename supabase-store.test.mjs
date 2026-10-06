@@ -173,8 +173,8 @@ test('public comment lists return comments from every author with each author na
     const requestUrl = String(url);
     calls.push(requestUrl);
     if (requestUrl.includes('/rest/v1/public_post_comments?')) return jsonResponse([
-      { id: 1, post_id: 31, author_id: 'owner-1', content: 'My comment', created_at: '2026-10-06T08:01:00Z' },
       { id: 2, post_id: 31, author_id: 'student-2', content: 'Another student comment', created_at: '2026-10-06T08:02:00Z' },
+      { id: 1, post_id: 31, author_id: 'owner-1', content: 'My comment', created_at: '2026-10-06T08:01:00Z' },
     ]);
     if (requestUrl.includes('/rest/v1/users?')) return jsonResponse([
       { id: 'owner-1', full_name: 'Post Owner', name: 'Owner', picture: null },
@@ -187,7 +187,9 @@ test('public comment lists return comments from every author with each author na
     const comments = await store.listPostComments(31);
     assert.equal(comments.length, 2);
     assert.deepEqual(comments.map(comment => comment.author.name), ['Post Owner', 'Other Student']);
+    assert.deepEqual(comments.map(comment => comment.content), ['My comment', 'Another student comment']);
     assert.ok(calls.some(url => url.includes('post_id=eq.31')));
+    assert.ok(calls.some(url => url.includes('order=created_at.desc&limit=200')));
     assert.ok(!calls.some(url => url.includes('author_id=eq.')));
   } finally {
     globalThis.fetch = originalFetch;

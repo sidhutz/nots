@@ -30,6 +30,8 @@ test('public attachment composer and social feed have narrow phone layouts', () 
 
 test('open comment panels refresh and poll for comments from other students', () => {
   assert.match(app, /if \(!panel\.hidden\) await loadPostComments\(postId, panel\)/);
-  assert.match(app, /setInterval\(refreshOpenComments, 12000\)/);
+  assert.match(app, /fetch\(`\/api\/posts\/\$\{postId\}\/comments`, \{ cache: 'no-store' \}\)/);
+  assert.match(app, /setInterval\(refreshOpenComments, 5000\)/);
+  assert.match(app, /if \(viewName === 'feed'\) refreshOpenComments\(\)/);
   assert.match(app, /panel\.closest\('\[data-post-card\]'\)\?\.querySelector\('\[data-toggle-comments\]'\)/);
 });

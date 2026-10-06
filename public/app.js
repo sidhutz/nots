@@ -103,6 +103,7 @@ if (profileForm && uploadForm && logout) {
     dashboardMenu.hidden = true;
     menuToggle.setAttribute('aria-expanded', 'false');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (viewName === 'feed') refreshOpenComments();
   }
 
   menuToggle.addEventListener('click', () => {
@@ -405,7 +406,7 @@ if (profileForm && uploadForm && logout) {
     panel.dataset.loading = 'true';
     if (!silent) list.textContent = 'Loading comments…';
     try {
-      const response = await fetch(`/api/posts/${postId}/comments`);
+      const response = await fetch(`/api/posts/${postId}/comments`, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw Error(data.error || 'Could not load comments.');
       const comments = data.comments || [];
@@ -431,7 +432,7 @@ if (profileForm && uploadForm && logout) {
       if (card) void loadPostComments(card.dataset.postCard, panel, { silent: true });
     }
   }
-  setInterval(refreshOpenComments, 12000);
+  setInterval(refreshOpenComments, 5000);
   document.addEventListener('visibilitychange', refreshOpenComments);
   window.addEventListener('focus', refreshOpenComments);
 
@@ -519,6 +520,8 @@ if (profileForm && uploadForm && logout) {
       textarea.value = '';
       post.commentCount += 1;
       card.querySelector('[data-toggle-comments]').textContent = `${post.commentCount} ${post.commentCount === 1 ? 'comment' : 'comments'}`;
+      const list = card.querySelector('[data-comment-list]');
+      if (data.comment) list.insertAdjacentHTML('beforeend', renderComments([data.comment]));
       await loadPostComments(card.dataset.postCard, card.querySelector('[data-comments-panel]'));
     } catch (error) { feedStatus.textContent = error.message || 'Could not add the comment.'; }
     finally { button.disabled = false; }

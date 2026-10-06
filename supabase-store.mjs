@@ -249,9 +249,9 @@ export function openSupabaseStore({ url, secretKey }) {
       await write('public_post_likes', 'DELETE', `post_id=eq.${filter(postId)}&user_id=eq.${filter(userId)}`, undefined, 'return=minimal');
     },
     async listPostComments(postId) {
-      const comments = await rows('public_post_comments', `select=id,post_id,author_id,content,created_at&post_id=eq.${filter(postId)}&order=created_at.asc&limit=200`);
+      const comments = await rows('public_post_comments', `select=id,post_id,author_id,content,created_at&post_id=eq.${filter(postId)}&order=created_at.desc&limit=200`);
       const users = await usersByIds(comments.map(comment => comment.author_id));
-      return comments.map(comment => ({
+      return comments.reverse().map(comment => ({
         id: comment.id, postId: comment.post_id, content: comment.content,
         author: users.get(String(comment.author_id)) || { id: comment.author_id, name: 'Student', picture: null },
         createdAt: comment.created_at,
