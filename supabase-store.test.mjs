@@ -173,9 +173,10 @@ test('public comment lists return comments from every author with each author na
     const requestUrl = String(url);
     calls.push(requestUrl);
     if (requestUrl.includes('/rest/v1/public_post_comments?')) return jsonResponse([
-      { id: 2, post_id: 31, author_id: 'student-2', content: 'Another student comment', created_at: '2026-10-06T08:02:00Z' },
-      { id: 1, post_id: 31, author_id: 'owner-1', content: 'My comment', created_at: '2026-10-06T08:01:00Z' },
+      { id: 2, post_id: 31, author_id: 'student-2', content: 'Another student comment', like_count: 3, created_at: '2026-10-06T08:02:00Z' },
+      { id: 1, post_id: 31, author_id: 'owner-1', content: 'My comment', like_count: 0, created_at: '2026-10-06T08:01:00Z' },
     ]);
+    if (requestUrl.includes('/rest/v1/public_comment_likes?')) return jsonResponse([{ comment_id: 2 }]);
     if (requestUrl.includes('/rest/v1/users?')) return jsonResponse([
       { id: 'owner-1', full_name: 'Post Owner', name: 'Owner', picture: null },
       { id: 'student-2', full_name: 'Other Student', name: 'Other', picture: null },
@@ -184,13 +185,71 @@ test('public comment lists return comments from every author with each author na
   };
   try {
     const store = openSupabaseStore({ url: 'https://example.supabase.co', secretKey: 'test-only' });
-    const comments = await store.listPostComments(31);
+    const comments = await store.listPostComments(31, 'student-2');
     assert.equal(comments.length, 2);
     assert.deepEqual(comments.map(comment => comment.author.name), ['Post Owner', 'Other Student']);
     assert.deepEqual(comments.map(comment => comment.content), ['My comment', 'Another student comment']);
+    assert.deepEqual(comments.map(comment => comment.likeCount), [0, 3]);
+    assert.deepEqual(comments.map(comment => comment.likedByMe), [false, true]);
     assert.ok(calls.some(url => url.includes('post_id=eq.31')));
     assert.ok(calls.some(url => url.includes('order=created_at.desc&limit=200')));
     assert.ok(!calls.some(url => url.includes('author_id=eq.')));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('public comments keep rendering if the comment-like migration has not been applied yet', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async url => {
+    const requestUrl = String(url);
+    if (requestUrl.includes('/rest/v1/public_post_comments?') && requestUrl.includes('like_count')) {
+      return jsonResponse({ code: 'PGRST204', message: "Could not find the 'like_count' column" }, 400);
+    }
+    if (requestUrl.includes('/rest/v1/public_post_comments?')) return jsonResponse([
+      { id: 4, post_id: 31, author_id: 'owner-1', content: 'Existing comment', created_at: '2026-10-06T08:01:00Z' },
+    ]);
+    if (requestUrl.includes('/rest/v1/public_comment_likes?')) {
+      return jsonResponse({ code: 'PGRST205', message: "Could not find table 'public.public_comment_likes'" }, 404);
+    }
+    if (requestUrl.includes('/rest/v1/users?')) return jsonResponse([{ id: 'owner-1', full_name: 'Post Owner', name: 'Owner', picture: null }]);
+    throw Error(`Unexpected request ${requestUrl}`);
+  };
+  try {
+    const store = openSupabaseStore({ url: 'https://example.supabase.co', secretKey: 'test-only' });
+    const comments = await store.listPostComments(31, 'viewer-1');
+    assert.equal(comments.length, 1);
+    assert.equal(comments[0].content, 'Existing comment');
+    assert.equal(comments[0].likeCount, 0);
+    assert.equal(comments[0].likedByMe, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('comment likes are stored once per signed-in student and expose liker names', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url);
+    calls.push({ url: requestUrl, options });
+    if (requestUrl.includes('/rest/v1/public_comment_likes?') && (!options.method || options.method === 'GET')) {
+      return jsonResponse([{ user_id: 'student-2', created_at: '2026-10-06T08:05:00Z' }]);
+    }
+    if (requestUrl.includes('/rest/v1/users?')) return jsonResponse([{ id: 'student-2', full_name: 'Taylor', name: 'Taylor', picture: null }]);
+    return new Response(null, { status: 204 });
+  };
+  try {
+    const store = openSupabaseStore({ url: 'https://example.supabase.co', secretKey: 'test-only' });
+    const likes = await store.listPostCommentLikes(90);
+    assert.equal(likes.length, 1);
+    assert.equal(likes[0].user.name, 'Taylor');
+    await store.likePostComment(90, 'student-2');
+    assert.deepEqual(calls.at(-1).options.headers.Prefer, 'resolution=ignore-duplicates,return=minimal');
+    assert.match(calls.at(-1).url, /on_conflict=comment_id,user_id/);
+    assert.deepEqual(JSON.parse(calls.at(-1).options.body), { comment_id: 90, user_id: 'student-2' });
+    await store.unlikePostComment(90, 'student-2');
+    assert.match(calls.at(-1).url, /comment_id=eq.90&user_id=eq.student-2/);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -224,8 +283,8 @@ test('public community account export is scoped to that account', async () => {
   try {
     const store = openSupabaseStore({ url: 'https://example.supabase.co', secretKey: 'test-only' });
     const exported = await store.listPublicDataByUser('student-1');
-    assert.deepEqual(Object.keys(exported), ['posts', 'likes', 'comments', 'reposts', 'attachments']);
-    assert.equal(calls.length, 5);
+    assert.deepEqual(Object.keys(exported), ['posts', 'likes', 'comments', 'reposts', 'attachments', 'commentLikes']);
+    assert.equal(calls.length, 6);
     assert.ok(calls.every(url => url.includes('author_id=eq.student-1') || url.includes('user_id=eq.student-1')));
   } finally {
     globalThis.fetch = originalFetch;

@@ -16,9 +16,15 @@ export function openSupabaseStore({ url, secretKey }) {
       signal: AbortSignal.timeout(20000),
     });
     if (!response.ok) {
-      if (response.status === 404) {
+      if (response.status === 400 || response.status === 404) {
         const error = await response.json().catch(() => null);
-        if (error?.code === 'PGRST205') throw Error('Community database setup is incomplete. Apply the public-community Supabase migration.');
+        const details = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`;
+        if (['PGRST204', 'PGRST205', '42703'].includes(error?.code) && (details.includes('public_comment_likes') || details.includes('like_count'))) {
+          throw Error('COMMENT_LIKES_SCHEMA_NOT_READY');
+        }
+        if (response.status === 404 && error?.code === 'PGRST205') {
+          throw Error('Community database setup is incomplete. Apply the public-community Supabase migration.');
+        }
       }
       throw Error(`Supabase request failed (${response.status})`);
     }
@@ -251,14 +257,50 @@ export function openSupabaseStore({ url, secretKey }) {
     async unlikePublicPost(postId, userId) {
       await write('public_post_likes', 'DELETE', `post_id=eq.${filter(postId)}&user_id=eq.${filter(userId)}`, undefined, 'return=minimal');
     },
-    async listPostComments(postId) {
-      const comments = await rows('public_post_comments', `select=id,post_id,author_id,content,created_at&post_id=eq.${filter(postId)}&order=created_at.desc&limit=200`);
+    async listPostComments(postId, viewerId) {
+      let comments;
+      let hasLikeCount = true;
+      try {
+        comments = await rows('public_post_comments', `select=id,post_id,author_id,content,created_at,like_count&post_id=eq.${filter(postId)}&order=created_at.desc&limit=200`);
+      } catch (error) {
+        if (error.message !== 'COMMENT_LIKES_SCHEMA_NOT_READY') throw error;
+        hasLikeCount = false;
+        comments = await rows('public_post_comments', `select=id,post_id,author_id,content,created_at&post_id=eq.${filter(postId)}&order=created_at.desc&limit=200`);
+      }
+      let viewerLikes = [];
+      if (viewerId && comments.length) {
+        try {
+          viewerLikes = await rows('public_comment_likes', `select=comment_id&user_id=eq.${filter(viewerId)}&comment_id=${filter(inFilter(comments.map(comment => comment.id)))}`);
+        } catch (error) {
+          if (error.message !== 'COMMENT_LIKES_SCHEMA_NOT_READY') throw error;
+        }
+      }
+      const likedCommentIds = new Set(viewerLikes.map(like => String(like.comment_id)));
       const users = await usersByIds(comments.map(comment => comment.author_id));
       return comments.reverse().map(comment => ({
         id: comment.id, postId: comment.post_id, content: comment.content,
         author: users.get(String(comment.author_id)) || { id: comment.author_id, name: 'Student', picture: null },
         createdAt: comment.created_at,
+        likeCount: hasLikeCount ? Number(comment.like_count) || 0 : 0,
+        likedByMe: likedCommentIds.has(String(comment.id)),
       }));
+    },
+    async getPostCommentById(commentId, postId) {
+      return one('public_post_comments', `select=id,post_id&id=eq.${filter(commentId)}&post_id=eq.${filter(postId)}`);
+    },
+    async listPostCommentLikes(commentId) {
+      const likes = await rows('public_comment_likes', `select=user_id,created_at&comment_id=eq.${filter(commentId)}&order=created_at.asc&limit=500`);
+      const users = await usersByIds(likes.map(like => like.user_id));
+      return likes.map(like => ({
+        user: users.get(String(like.user_id)) || { id: like.user_id, name: 'Student', picture: null },
+        createdAt: like.created_at,
+      }));
+    },
+    async likePostComment(commentId, userId) {
+      await write('public_comment_likes', 'POST', 'on_conflict=comment_id,user_id', { comment_id: commentId, user_id: userId }, 'resolution=ignore-duplicates,return=minimal');
+    },
+    async unlikePostComment(commentId, userId) {
+      await write('public_comment_likes', 'DELETE', `comment_id=eq.${filter(commentId)}&user_id=eq.${filter(userId)}`, undefined, 'return=minimal');
     },
     async createPostComment({ postId, userId, content }) {
       const result = await write('public_post_comments', 'POST', '', { post_id: postId, author_id: userId, content });
@@ -266,7 +308,7 @@ export function openSupabaseStore({ url, secretKey }) {
       const author = await this.getUserById(userId);
       return {
         id: comment.id, postId: comment.post_id, content: comment.content,
-        author: publicPerson(author), createdAt: comment.created_at,
+        author: publicPerson(author), createdAt: comment.created_at, likeCount: 0, likedByMe: false,
       };
     },
     async listPostReposts(postId) {
@@ -289,7 +331,7 @@ export function openSupabaseStore({ url, secretKey }) {
     },
     async listPublicDataByUser(userId) {
       const owner = filter(userId);
-      const [posts, likes, comments, reposts, attachments] = await Promise.all([
+      const [posts, likes, comments, reposts, attachments, commentLikes] = await Promise.all([
         rows('public_posts', `select=id,title,content,like_count,comment_count,repost_count,created_at&author_id=eq.${owner}&order=created_at.desc`),
         rows('public_post_likes', `select=post_id,created_at&user_id=eq.${owner}&order=created_at.desc`),
         rows('public_post_comments', `select=id,post_id,content,created_at&author_id=eq.${owner}&order=created_at.desc`),
@@ -298,8 +340,12 @@ export function openSupabaseStore({ url, secretKey }) {
           const authoredPosts = await rows('public_posts', `select=id&author_id=eq.${owner}`);
           return this.listPostAttachments(authoredPosts.map(post => String(post.id)));
         })(),
+        rows('public_comment_likes', `select=comment_id,created_at&user_id=eq.${owner}&order=created_at.desc`).catch(error => {
+          if (error.message === 'COMMENT_LIKES_SCHEMA_NOT_READY') return [];
+          throw error;
+        }),
       ]);
-      return { posts, likes, comments, reposts, attachments };
+      return { posts, likes, comments, reposts, attachments, commentLikes };
     },
     async createTodo({ userId, text, dueAt = null }) {
       const result = await write('todos', 'POST', '', { user_id: userId, text, ...(dueAt ? { due_at: dueAt } : {}) });

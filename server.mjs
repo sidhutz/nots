@@ -422,6 +422,28 @@ const server = http.createServer(async (req, res) => {
       return res.end(file);
     }
 
+    const commentLikeMatch = url.pathname.match(/^\/api\/posts\/(\d+)\/comments\/(\d+)\/likes$/);
+    if (commentLikeMatch) {
+      const postId = Number(commentLikeMatch[1]);
+      const commentId = Number(commentLikeMatch[2]);
+      const user = await requireUser(req, res);
+      if (!user) return;
+      const comment = await store.getPostCommentById(commentId, postId);
+      if (!comment) return json(res, 404, { error: 'Comment not found.' });
+      if (req.method === 'GET') return json(res, 200, { likes: await store.listPostCommentLikes(commentId) });
+      if (req.method === 'POST' || req.method === 'DELETE') {
+        if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
+        if (req.method === 'POST') {
+          await store.likePostComment(commentId, user.id);
+          audit(user.id, 'public_comment_liked', { postId, commentId });
+        } else {
+          await store.unlikePostComment(commentId, user.id);
+          audit(user.id, 'public_comment_unliked', { postId, commentId });
+        }
+        return json(res, 200, { ok: true });
+      }
+    }
+
     const postMatch = url.pathname.match(/^\/api\/posts\/(\d+)(?:\/(likes|comments|reposts))?$/);
     if (postMatch) {
       const postId = Number(postMatch[1]);
@@ -457,7 +479,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (action === 'comments') {
-        if (req.method === 'GET') return json(res, 200, { comments: await store.listPostComments(postId) });
+        if (req.method === 'GET') return json(res, 200, { comments: await store.listPostComments(postId, user.id) });
         if (req.method === 'POST') {
           if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
           const body = await readJson(req, 8 * 1024);
@@ -677,6 +699,7 @@ const server = http.createServer(async (req, res) => {
       'Body too large': ['The uploaded file is too large. Keep it under 10 MB.', 413],
       'Unsupported public attachment': ['Choose an image, PDF, Word, PowerPoint, or text file.', 415],
       'Community database setup is incomplete. Apply the public-community Supabase migration.': ['Posting is not ready yet: apply supabase-migrations/20261006_public_community.sql in the Supabase SQL Editor, then retry.', 503],
+      'COMMENT_LIKES_SCHEMA_NOT_READY': ['Comment likes are not set up yet. Run supabase-migrations/20261007_public_comment_likes.sql in Supabase SQL Editor.', 503],
       'Missing form boundary': ['Upload the file using the provided form.', 400],
       'Invalid multipart headers': ['The upload format was invalid.', 400],
       'Missing multipart field name': ['The upload payload was invalid.', 400],

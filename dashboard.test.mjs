@@ -55,3 +55,16 @@ test('signed-in students can upload private and public notes before completing t
   assert.match(renderUser, /Private files are visible only to your account/);
   assert.match(server, /userId: user\.id,[\s\S]{0,100}title,[\s\S]{0,100}originalName/);
 });
+
+test('students can like comments, inspect who liked them, and the header calls navigation Menu', () => {
+  const migration = readFileSync(new URL('./supabase-migrations/20261007_public_comment_likes.sql', import.meta.url), 'utf8');
+  assert.match(dashboard, /id="menuToggle"[^>]*>☰ Menu/);
+  assert.match(app, /data-like-comment aria-pressed/);
+  assert.match(app, /data-show-comment-likers/);
+  assert.match(app, /\/api\/posts\/\$\{postId\}\/comments\/\$\{commentId\}\/likes/);
+  assert.match(server, /public_comment_likes/);
+  assert.match(server, /listPostComments\(postId, user\.id\)/);
+  assert.match(migration, /create table if not exists public\.public_comment_likes/);
+  assert.match(migration, /on delete cascade/);
+  assert.match(migration, /sync_comment_like_count/);
+});

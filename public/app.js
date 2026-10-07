@@ -322,7 +322,7 @@ if (profileForm && uploadForm && logout) {
 
   function renderComments(comments) {
     if (!comments.length) return '<p class="small">No comments yet. Start the conversation.</p>';
-    return comments.map(comment => `<article class="social-comment">${socialAvatar(comment.author)}<div><strong>${escapeHtml(comment.author?.name || 'Student')}</strong><p>${escapeHtml(comment.content)}</p></div></article>`).join('');
+    return comments.map(comment => `<article class="social-comment" data-comment-card="${comment.id}">${socialAvatar(comment.author)}<div class="social-comment-body"><strong>${escapeHtml(comment.author?.name || 'Student')}</strong><p>${escapeHtml(comment.content)}</p><div class="social-comment-actions"><button class="ghost" type="button" data-like-comment aria-pressed="${Boolean(comment.likedByMe)}">${comment.likedByMe ? '♥ Liked' : '♡ Like'}</button><button class="ghost" type="button" data-show-comment-likers>${Number(comment.likeCount) || 0} ${comment.likeCount === 1 ? 'like' : 'likes'}</button></div><div class="social-comment-likers" data-comment-likers hidden></div><p class="small" data-comment-like-feedback aria-live="polite"></p></div></article>`).join('');
   }
 
   function renderFeed(posts) {
@@ -390,6 +390,20 @@ if (profileForm && uploadForm && logout) {
     }
   }
 
+  async function loadCommentLikers(postId, commentId, panel) {
+    panel.hidden = false;
+    panel.textContent = 'Loading…';
+    try {
+      const response = await fetch(`/api/posts/${postId}/comments/${commentId}/likes`);
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error || 'Could not load comment likes.');
+      const people = data.likes || [];
+      panel.innerHTML = people.length ? renderPeople(people) : '<p class="small">No likes yet.</p>';
+    } catch (error) {
+      panel.textContent = error.message || 'Could not load comment likes.';
+    }
+  }
+
   async function loadPostComments(postId, panel, { silent = false } = {}) {
     if (panel.dataset.loading === 'true') return;
     const list = panel.querySelector('[data-comment-list]');
@@ -432,6 +446,30 @@ if (profileForm && uploadForm && logout) {
     const postId = card.dataset.postCard;
     const post = feedPostsById.get(String(postId));
     if (!post) return;
+    const commentLikeButton = event.target.closest('[data-like-comment]');
+    if (commentLikeButton) {
+      const commentCard = commentLikeButton.closest('[data-comment-card]');
+      const liked = commentLikeButton.getAttribute('aria-pressed') === 'true';
+      commentLikeButton.disabled = true;
+      try {
+        const response = await fetch(`/api/posts/${postId}/comments/${commentCard.dataset.commentCard}/likes`, { method: liked ? 'DELETE' : 'POST' });
+        const data = await response.json();
+        if (!response.ok) throw Error(data.error || 'Could not update comment like.');
+        await loadPostComments(postId, card.querySelector('[data-comments-panel]'), { silent: true });
+      } catch (error) {
+        commentCard.querySelector('[data-comment-like-feedback]').textContent = error.message || 'Could not update comment like.';
+        commentLikeButton.disabled = false;
+      }
+      return;
+    }
+    const commentLikersButton = event.target.closest('[data-show-comment-likers]');
+    if (commentLikersButton) {
+      const commentCard = commentLikersButton.closest('[data-comment-card]');
+      const panel = commentCard.querySelector('[data-comment-likers]');
+      if (panel.hidden) await loadCommentLikers(postId, commentCard.dataset.commentCard, panel);
+      else panel.hidden = true;
+      return;
+    }
     const likerButton = event.target.closest('[data-show-likers]');
     if (likerButton) {
       const panel = card.querySelector('[data-likers-panel]');
