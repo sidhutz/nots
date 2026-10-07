@@ -341,7 +341,6 @@ const server = http.createServer(async (req, res) => {
       if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
       const user = await requireUser(req, res);
       if (!user) return;
-      if (!user.profile_completed) return json(res, 400, { error: 'Save your student profile before uploading notes.' });
       const { fields, files } = await parseMultipart(req);
       const uploaded = files.noteFile;
       if (!uploaded || !uploaded.data?.length) return json(res, 400, { error: 'Choose a note file to upload.' });
@@ -374,7 +373,6 @@ const server = http.createServer(async (req, res) => {
       if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
       const user = await requireUser(req, res);
       if (!user) return;
-      if (!user.profile_completed) return json(res, 400, { error: 'Complete your student profile before sharing a public note.' });
       const isMultipart = (req.headers['content-type'] || '').toLowerCase().includes('multipart/form-data');
       const body = isMultipart
         ? await parseMultipart(req, 10 * 1024 * 1024 + 128 * 1024)
@@ -533,7 +531,6 @@ const server = http.createServer(async (req, res) => {
       if (!sameOrigin(req)) return json(res, 403, { error: 'Invalid request origin' });
       const user = await requireUser(req, res);
       if (!user) return;
-      if (!user.profile_completed) return json(res, 400, { error: 'Save your student profile before adding personal notes.' });
       const body = await readJson(req);
       const title = sanitizeText(body.title, 120);
       const content = String(body.content || '').trim().slice(0, 10000);

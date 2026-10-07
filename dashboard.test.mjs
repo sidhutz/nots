@@ -46,3 +46,12 @@ test('persistent login survives browser restarts and renews while active', () =>
   assert.match(server, /store\.extendSession\(tokenHash, now \+ SESSION_TTL_MS\)/);
   assert.match(server, /cookie\('sid', sid, SESSION_TTL_SECONDS\)/);
 });
+
+test('signed-in students can upload private and public notes before completing their optional profile', () => {
+  assert.doesNotMatch(server, /if \(!user\.profile_completed\)[^\n]*(?:uploading notes|sharing a public note|adding personal notes)/);
+  const renderUser = app.match(/function renderUser\(user\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(renderUser, 'renderUser should exist');
+  assert.doesNotMatch(renderUser, /(?:uploadForm\.querySelector\('button'\)|noteFile|noteTitle|textNoteForm\.querySelector\('button'\)|textNoteTitle|textNoteContent|publicPostTitle|publicPostContent|publicPostAttachment|publishPostButton)\.disabled = !user\.profile_completed/);
+  assert.match(renderUser, /Private files are visible only to your account/);
+  assert.match(server, /userId: user\.id,[\s\S]{0,100}title,[\s\S]{0,100}originalName/);
+});

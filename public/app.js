@@ -142,22 +142,12 @@ if (profileForm && uploadForm && logout) {
     $('contactEmail').value = user.contact_email || user.google_email || '';
     $('role').value = user.role || 'Student';
     profileState.textContent = user.profile_completed
-      ? 'Student profile saved. Only your signed-in account can see its notes and todos.'
-      : 'Save your full name and email once, then you can upload notes, write study notes, and create todos.';
-    uploadForm.querySelector('button').disabled = !user.profile_completed;
-    noteFile.disabled = !user.profile_completed;
-    noteTitle.disabled = !user.profile_completed;
-    uploadHint.textContent = user.profile_completed
-      ? 'Upload PDF, images, DOCX, TXT or other note files up to 10 MB.'
-      : 'Save the student profile first. After that, note uploads unlock.';
+      ? 'Student profile saved. Only your signed-in account can see its private notes and todos.'
+      : 'Your Google name and email are used until you choose to save a student profile.';
+    uploadHint.textContent = 'Upload PDF, images, DOCX, TXT or other note files up to 10 MB. Private files are visible only to your account.';
 
     if (textNoteForm) {
-      textNoteForm.querySelector('button').disabled = !user.profile_completed;
-      textNoteTitle.disabled = !user.profile_completed;
-      textNoteContent.disabled = !user.profile_completed;
-      textNoteHint.textContent = user.profile_completed
-        ? 'Write and save personal study notes directly to your account.'
-        : 'Save the student profile first to write personal notes.';
+      textNoteHint.textContent = 'Write and save personal study notes directly to your account.';
     }
 
     if (todoForm) {
@@ -169,11 +159,10 @@ if (profileForm && uploadForm && logout) {
     }
 
     if (publicPostForm) {
-      publicPostTitle.disabled = !user.profile_completed;
-      publicPostContent.disabled = !user.profile_completed;
-      publicPostAttachment.disabled = !user.profile_completed;
-      publishPostButton.disabled = !user.profile_completed;
-      if (!user.profile_completed) feedStatus.textContent = 'Complete your student profile from the menu before sharing a public note.';
+      publicPostTitle.disabled = false;
+      publicPostContent.disabled = false;
+      publicPostAttachment.disabled = false;
+      publishPostButton.disabled = false;
     }
   }
 
@@ -221,7 +210,7 @@ if (profileForm && uploadForm && logout) {
     const notes = filteredNotes(allFileNotes, 'file');
     notesEmpty.hidden = notes.length > 0;
     if (!notes.length && allFileNotes.length) notesEmpty.textContent = 'No uploaded files match these filters.';
-    else notesEmpty.textContent = 'No notes yet. Save your student profile, then upload your first file.';
+    else notesEmpty.textContent = 'No notes yet. Upload your first file or write a personal study note.';
     for (const note of notes) {
       const card = document.createElement('article');
       card.className = 'note-card';
@@ -552,7 +541,7 @@ if (profileForm && uploadForm && logout) {
       feedStatus.textContent = 'Your public study note has been shared.';
       await loadFeed();
     } catch (error) { feedStatus.textContent = error.message || 'Could not share your note.'; }
-    finally { publishPostButton.disabled = !currentUser?.profile_completed; }
+    finally { publishPostButton.disabled = false; }
   });
 
   function setAutosaveLabel(text, tone = '') {
