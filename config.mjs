@@ -41,6 +41,8 @@ export function readConfig(root=projectDir,env=process.env) {
  const dbSetting=text('DB_PATH') || './data/users.sqlite';
  const n8nWebhookUrl=text('N8N_LOGIN_WEBHOOK_URL');
  const n8nWebhookSecret=text('N8N_WEBHOOK_SECRET');
+ const geminiApiKey=text('GEMINI_API_KEY');
+ const geminiModel=text('GEMINI_MODEL') || 'gemini-3.6-flash';
  const supabaseUrl=text('SUPABASE_URL'), supabaseSecretKey=text('SUPABASE_SECRET_KEY');
  if(supabaseUrl||supabaseSecretKey){
   if(!supabaseUrl)errors.push('SUPABASE_URL is empty. Configure the Supabase project URL in .env.');
@@ -48,7 +50,7 @@ export function readConfig(root=projectDir,env=process.env) {
   if(!supabaseSecretKey)errors.push('SUPABASE_SECRET_KEY is empty. Add the server-only secret key to .env.');
   else if(!/^(sb_secret_[A-Za-z0-9_-]+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.test(supabaseSecretKey))errors.push('SUPABASE_SECRET_KEY format is invalid; use a Supabase secret/service_role key.');
  }
- return {errors,envFileFound:existsSync(envPath),clientId,clientSecret,port,base,supabaseUrl,supabaseSecretKey,
+ return {errors,envFileFound:existsSync(envPath),clientId,clientSecret,port,base,supabaseUrl,supabaseSecretKey,geminiApiKey,geminiModel,
   dbPath:isAbsolute(dbSetting)?dbSetting:resolve(root,dbSetting),
   n8nWebhookUrl,n8nWebhookSecret};
 }

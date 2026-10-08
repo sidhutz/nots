@@ -39,11 +39,17 @@ DB_PATH=./data/users.sqlite
 NODE_ENV=development
 SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SECRET_KEY=sb_secret_your-server-only-key
+GEMINI_API_KEY=your-google-ai-studio-key
+GEMINI_MODEL=gemini-3.6-flash
 ```
 
 `SUPABASE_SECRET_KEY` is server-only. Isse `public/` files, Git, screenshots,
 ya chat mein kabhi paste na karein. `supabase-schema.sql` Supabase SQL Editor
 mein ek baar run karein; ye private storage bucket aur app tables banata hai.
+`GEMINI_API_KEY` bhi secret hai: ise sirf local `.env` ya Render ke Environment
+settings mein set karein, kabhi browser code ya GitHub mein nahi. Chat questions
+Google Gemini ko bheje jaate hain; Student Hub unhe apne database mein save nahi
+karta. `npm run check` key ki presence sirf yes/no ke roop mein dikhata hai.
 
 ## Google Console settings
 

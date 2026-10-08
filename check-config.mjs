@@ -5,6 +5,7 @@ try {
  console.log('Client ID present:',Boolean(c.clientId));
  console.log('Client Secret present:',Boolean(c.clientSecret));
  console.log('Supabase server settings present:',Boolean(c.supabaseUrl&&c.supabaseSecretKey));
+ console.log('Google AI Studio key present:',Boolean(c.geminiApiKey));
  console.log('Configuration:',c.errors.length?'NEEDS FIX':'OK (presence/format only; Google has not verified credentials)');
  for(const e of c.errors)console.log('- '+e);
  process.exitCode=c.errors.length?1:0;
