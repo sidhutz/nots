@@ -299,10 +299,15 @@ const server = http.createServer(async (req, res) => {
             contents: chatbotContents(body.history, message),
             generationConfig: { temperature: 0.35, maxOutputTokens: 360 },
           }),
-          signal: AbortSignal.timeout(25000),
+          signal: AbortSignal.timeout(45000),
         });
-      } catch {
-        return json(res, 502, { error: 'Google AI could not be reached right now. Please try again shortly.' });
+      } catch (error) {
+        const code = error.cause?.code || error.code || 'unknown';
+        console.error(`Gemini API connection failed (${error.name}; ${code}).`);
+        if (error.name === 'TimeoutError') {
+          return json(res, 504, { error: 'Google AI is taking too long to respond. Please try again shortly.' });
+        }
+        return json(res, 502, { error: 'The server could not connect to Google AI. Please try again shortly.' });
       }
       if (response.status === 429) return json(res, 429, { error: 'The AI helper is busy right now. Please wait a moment and try again.' });
       if (response.status === 401 || response.status === 403) {
