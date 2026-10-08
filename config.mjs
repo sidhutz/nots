@@ -42,7 +42,7 @@ export function readConfig(root=projectDir,env=process.env) {
  const n8nWebhookUrl=text('N8N_LOGIN_WEBHOOK_URL');
  const n8nWebhookSecret=text('N8N_WEBHOOK_SECRET');
  const geminiApiKey=text('GEMINI_API_KEY');
- const geminiModel=text('GEMINI_MODEL') || 'gemini-3.6-flash';
+ const geminiModel=text('GEMINI_MODEL') || 'gemini-3.5-flash-lite';
  const supabaseUrl=text('SUPABASE_URL'), supabaseSecretKey=text('SUPABASE_SECRET_KEY');
  if(supabaseUrl||supabaseSecretKey){
   if(!supabaseUrl)errors.push('SUPABASE_URL is empty. Configure the Supabase project URL in .env.');

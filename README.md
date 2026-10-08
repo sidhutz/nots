@@ -40,7 +40,7 @@ NODE_ENV=development
 SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SECRET_KEY=sb_secret_your-server-only-key
 GEMINI_API_KEY=your-google-ai-studio-key
-GEMINI_MODEL=gemini-3.6-flash
+GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
 `SUPABASE_SECRET_KEY` is server-only. Isse `public/` files, Git, screenshots,
