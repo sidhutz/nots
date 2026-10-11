@@ -98,6 +98,12 @@ if (profileForm && uploadForm && logout) {
       if (button.dataset.viewTarget === viewName) button.setAttribute('aria-current', 'page');
       else button.removeAttribute('aria-current');
     }
+    for (const button of document.querySelectorAll('.glass-dock [data-view-target]')) {
+      const active = button.dataset.viewTarget === viewName;
+      button.classList.toggle('is-active', active);
+      if (active) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    }
     const activeButton = dashboardMenu.querySelector(`[data-view-target="${viewName}"]`);
     $('currentViewTitle').textContent = activeButton?.textContent.trim() || 'Study feed';
     dashboardMenu.hidden = true;
@@ -111,6 +117,10 @@ if (profileForm && uploadForm && logout) {
     menuToggle.setAttribute('aria-expanded', String(!dashboardMenu.hidden));
   });
   dashboardMenu.addEventListener('click', event => {
+    const button = event.target.closest('[data-view-target]');
+    if (button) showDashboardView(button.dataset.viewTarget);
+  });
+  document.querySelector('.glass-dock')?.addEventListener('click', event => {
     const button = event.target.closest('[data-view-target]');
     if (button) showDashboardView(button.dataset.viewTarget);
   });
