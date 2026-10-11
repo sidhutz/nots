@@ -1610,8 +1610,8 @@ footer {
    ======================================================================== */
 :root {
   --glass-line: rgba(255, 255, 255, .58);
-  --glass-fill: rgba(255, 255, 255, .58);
-  --glass-fill-strong: rgba(255, 255, 255, .76);
+  --glass-fill: rgba(250, 251, 255, .88);
+  --glass-fill-strong: rgba(250, 251, 255, .95);
   --glass-shadow: 0 24px 70px rgba(26, 33, 81, .18), inset 0 1px rgba(255,255,255,.8);
   --radius-sm: 12px;
   --radius-md: 20px;
@@ -1777,8 +1777,8 @@ body:has(.glass-dock) .ai-chat-widget { bottom: max(118px, calc(100px + env(safe
 
 :root[data-theme="dark"] {
   --glass-line: rgba(255,255,255,.2);
-  --glass-fill: rgba(18,25,48,.64);
-  --glass-fill-strong: rgba(18,25,48,.82);
+  --glass-fill: rgba(18,25,48,.88);
+  --glass-fill-strong: rgba(18,25,48,.95);
   --glass-shadow: 0 24px 70px rgba(0,0,0,.3), inset 0 1px rgba(255,255,255,.13);
 }
 :root[data-theme="dark"] .dashboard-menu { background: rgba(18,25,48,.88); }
@@ -1818,6 +1818,7 @@ header {
 }
 .brand { color: #172044; }
 .brand-text { background: linear-gradient(180deg,#111a3b,#3f4a73); -webkit-background-clip: text; }
+.login { background: rgba(250,251,255,.92); }
 .studio-badge, .status, .header-link, .header-actions button { border-color: rgba(63,76,125,.16); background: rgba(255,255,255,.76); color: #253052; text-shadow: none; }
 .studio-badge .lime-dot, .status .pulse-dot { box-shadow: 0 0 0 3px rgba(92,190,117,.16); }
 .intro h1, .panel h2, .feed-heading h1, .privacy-container > h1 { color: #151d3c; }
