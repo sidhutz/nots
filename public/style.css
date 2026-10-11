@@ -1806,3 +1806,47 @@ body:has(.glass-dock) .ai-chat-widget { bottom: max(118px, calc(100px + env(safe
   body { background: #fff !important; }
   .studio-card, .note-library, .note-card, .todo-item { background: #fff !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 }
+
+/* Final contrast pass: keep the decorative color behind the glass, not the text. */
+header {
+  border: 1px solid rgba(255,255,255,.75);
+  border-radius: 22px;
+  background: rgba(250,251,255,.84);
+  box-shadow: 0 12px 36px rgba(18,26,83,.14), inset 0 1px #fff;
+  backdrop-filter: blur(24px) saturate(145%);
+  -webkit-backdrop-filter: blur(24px) saturate(145%);
+}
+.brand { color: #172044; }
+.brand-text { background: linear-gradient(180deg,#111a3b,#3f4a73); -webkit-background-clip: text; }
+.studio-badge, .status, .header-link, .header-actions button { border-color: rgba(63,76,125,.16); background: rgba(255,255,255,.76); color: #253052; text-shadow: none; }
+.studio-badge .lime-dot, .status .pulse-dot { box-shadow: 0 0 0 3px rgba(92,190,117,.16); }
+.intro h1, .panel h2, .feed-heading h1, .privacy-container > h1 { color: #151d3c; }
+.intro-lead, .step, .step b, .panel-sub, .panel-desc, .consent, .footnote,
+.feed-heading p, .feed-heading .eyebrow-tag, .privacy-container > .eyebrow, .privacy-container > .privacy-lead { color: #35405f; }
+.eyebrow, .intro .eyebrow { color: #394bd0; }
+.intro .eyebrow .lime-dot { background: #229351; }
+.step-number { border-color: rgba(68,82,151,.16); background: #edf0ff; color: #3344ba; }
+.stack-steps { border-color: rgba(42,55,102,.16); }
+.panel .lock { border-color: rgba(65,80,156,.14); background: #eef0ff; color: #3449c2; }
+.feed-heading, .privacy-container { background: rgba(250,251,255,.88); }
+.privacy-card { background: rgba(255,255,255,.86); }
+.privacy-card, .privacy-card h2, .privacy-card p, .privacy-list li { color: #263251; }
+.glass-dock { background: linear-gradient(120deg,rgba(250,251,255,.8),rgba(229,239,255,.7)); }
+.glass-dock-item { color: #202b52; text-shadow: none; }
+.glass-dock-item.is-active { color: #fff; }
+footer { width: min(1240px, calc(100% - 40px)); margin: 12px auto 18px; padding: 10px 16px; border: 1px solid rgba(255,255,255,.62); border-radius: 16px; background: rgba(250,251,255,.72); color: #293451; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+footer a { color: #293fbd; }
+:root[data-theme="dark"] header { border-color: rgba(255,255,255,.2); background: rgba(18,25,48,.84); }
+:root[data-theme="dark"] .brand { color: #fff; }
+:root[data-theme="dark"] .brand-text { background: linear-gradient(180deg,#fff,#cbd5e1); -webkit-background-clip: text; }
+:root[data-theme="dark"] .studio-badge, :root[data-theme="dark"] .status, :root[data-theme="dark"] .header-link, :root[data-theme="dark"] .header-actions button { border-color: rgba(255,255,255,.18); background: rgba(28,39,65,.9); color: #f8fafc; }
+:root[data-theme="dark"] .feed-heading, :root[data-theme="dark"] .privacy-container, :root[data-theme="dark"] .privacy-card { background: rgba(18,25,48,.9); }
+:root[data-theme="dark"] .feed-heading h1, :root[data-theme="dark"] .privacy-container > h1 { color: #f8fafc; }
+:root[data-theme="dark"] .feed-heading p, :root[data-theme="dark"] .feed-heading .eyebrow-tag, :root[data-theme="dark"] .privacy-container > .eyebrow, :root[data-theme="dark"] .privacy-container > .privacy-lead { color: #d1d9eb; }
+:root[data-theme="dark"] .glass-dock { background: rgba(18,25,48,.86); }
+:root[data-theme="dark"] .glass-dock-item { color: #eef2ff; }
+:root[data-theme="dark"] footer { border-color: rgba(255,255,255,.18); background: rgba(18,25,48,.84); color: #d1d9eb; }
+:root[data-theme="dark"] footer a { color: #b9c5ff; }
+@media (max-width: 760px) {
+  header { width: calc(100% - 20px); margin: 10px auto 0; padding: 14px; }
+}
